@@ -1,0 +1,30 @@
+#!/usr/bin/python3
+
+import os
+import sys
+import rospy
+import numpy as np
+from abc import ABC, abstractmethod
+
+# Messages
+from sensor_msgs.msg import Image
+from std_msgs.msg import *
+from sensor_msgs.msg import *
+from geometry_msgs.msg import *
+from nav_msgs.msg import *
+
+# Custrom
+from abstract_state import State, TargetObject
+from abstract_real_intention_image import FState, FOV
+
+
+class VFOV(FOV):
+    def __init__(self, state: FState):
+        super().__init__(state)
+
+        self.state.register_observer(self.image_callback)
+
+    @abstractmethod
+    def image_callback(self):
+        """Calculate projecting image via state"""
+        pass
