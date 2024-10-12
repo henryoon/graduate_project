@@ -96,3 +96,14 @@ class Kalman(ABC):
     def filter(self):
         """Update kalman filter"""
         pass
+
+
+def main():
+    vio = Sensor("odometry/visual", Odometry)
+    encoder = Sensor("/encoder", None)
+    ndt = Sensor("/ndt", Odometry)
+
+    Kalman = Kalman(sensors=[vio, encoder, ndt])
+
+    while not rospy.is_shutdown():
+        Kalman.filter()

@@ -80,4 +80,16 @@ class RealIntention(ABC):
 
     @abstractmethod
     def run(self):
+        """Publish best target object to approach"""
         pass
+
+
+def main():
+    state = FState(topic="/odometry")
+    target_objects = []
+
+    real_intention = RealIntention(state, target_objects)
+
+    while not rospy.is_shutdown():
+        real_intention.run()
+        rospy.spin()
