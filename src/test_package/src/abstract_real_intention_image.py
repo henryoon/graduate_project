@@ -14,38 +14,34 @@ from nav_msgs.msg import *
 
 # Custrom
 from abstract_state import State, TargetObject
+from sensors import RealSenseD455_D, RealSenseD455_RGB
 
 
 class FState(State):
     def __init__(self, topic: str):
         super().__init__(topic)
 
-        self.covariance = self.calculate_covariance()
-        self.tangent_vector = self.calculate_tangent_vector()
+        self.linear_acceleration = Vector3()
 
         self.register_observer(self.calculate_covariance)
-        self.register_observer(self.calculate_tangent_vector)
+        self.register_observer(self.calculate_linear_acceleration)
 
     def calculate_covariance(self) -> np.array:
         """This function calculate covariance matrix from state"""
         pass
 
-    def calculate_tangent_vector(self) -> Vector3:
+    def calculate_linear_acceleration(self) -> Vector3:
         """This function calculate tangent vector from state"""
         pass
 
 
 class FOV(ABC):
-    def __init__(self, state: FState):
+    def __init__(
+        self, state: FState, camera: RealSenseD455_RGB, depth_camera: RealSenseD455_D
+    ):
         self.state = state
-        self.image = Image()
-
-    @abstractmethod
-    def image_callback(self, msg: Image):
-        """This callback function input sensor_msgs.msg.Image and update 2d image"""
-        if not isinstance(msg, Image):
-            rospy.logerr("Received message is not of type Image")
-            return
+        self.camera = camera
+        self.depth_camera = depth_camera
 
     @abstractmethod
     def project_image(self, state, image):

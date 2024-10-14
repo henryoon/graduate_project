@@ -16,6 +16,8 @@ class State(ABC):
     """State of End-Effector"""
 
     def __init__(self, topic: str):
+        self.data = None  # type: Odometry
+
         self._observers = []
 
     @abstractmethod
@@ -28,7 +30,7 @@ class State(ABC):
         self.notify_observers()
 
     @abstractmethod
-    def register_observer(self, observer_callback: function):
+    def register_observer(self, observer_callback):
         self._observers.append(observer_callback)
 
     @abstractmethod
