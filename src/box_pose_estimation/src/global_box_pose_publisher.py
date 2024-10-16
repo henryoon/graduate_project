@@ -22,6 +22,9 @@ class GlobalBoxPosePublisher:
         )
         self.marker_array = self.parse_box_to_marker_array()
 
+        self.data_pub = rospy.Publisher(
+            "/segmetation/boxes", BoxObjectMultiArray, queue_size=1
+        )
         self.pub = rospy.Publisher("/boxes/virtual", MarkerArray, queue_size=1)
 
     def load_boxes_from_json(self, json_file_path):
@@ -68,6 +71,9 @@ class GlobalBoxPosePublisher:
 
         return marker_array
 
+    def publish_boxes_data(self):
+        self.data_pub.publish(self.boxes)
+
     def publish_boxes(self):
         self.pub.publish(self.marker_array)
 
@@ -79,6 +85,7 @@ def main():
     rate = rospy.Rate(1)
     while not rospy.is_shutdown():
         global_box_pose_publisher.publish_boxes()
+        global_box_pose_publisher.publish_boxes_data()
         rate.sleep()
 
 

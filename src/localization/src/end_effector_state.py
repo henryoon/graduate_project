@@ -13,6 +13,11 @@ from abc import ABC, abstractmethod
 import moveit_commander
 
 # Messages
+from tf.transformations import (
+    quaternion_multiply,
+    quaternion_from_euler,
+    euler_from_quaternion,
+)
 from std_msgs.msg import *
 from sensor_msgs.msg import *
 from geometry_msgs.msg import *
@@ -31,6 +36,76 @@ except roslib.exceptions.ROSLibException:
 class EndEffectorState(AbstractState):
     def __init__(self, topic):
         super().__init__(topic)
+
+        # ROS
+        self.pub = rospy.Publisher(topic, Odometry, queue_size=10)
+        self.odom = Odometry()
+
+        # Moveit
+        self.move_group = moveit_commander.MoveGroupCommander(
+            "ENDEFFECTOR"
+        )  # 플래닝 그룹 이름
+
+        # variables
+        self.rotate_quat = quaternion_from_euler(0.0, -np.pi / 2.0, 0.0)
+
+    def calculate_twist(self, odom1: Odometry, odom2: Odometry):
+        dt = (odom2.header.stamp - odom1.header.stamp).to_sec()
+        if dt == 0.0:
+            rospy.logerr("Time difference (dt) cannot be zero.")
+            return Vector3(0, 0, 0), Vector3(0, 0, 0)
+
+        # 위치 변화 계산
+        dx = odom2.pose.pose.position.x - odom1.pose.pose.position.x
+        dy = odom2.pose.pose.position.y - odom1.pose.pose.position.y
+
+        # 쿼터니언 -> 오일러 각 변환
+        def extract_euler(odom):
+            q = odom.pose.pose.orientation
+            return euler_from_quaternion([q.x, q.y, q.z, q.w])
+
+        roll1, pitch1, yaw1 = extract_euler(odom1)
+        roll2, pitch2, yaw2 = extract_euler(odom2)
+
+        # 각도 변화 계산
+        droll, dpitch, dyaw = roll2 - roll1, pitch2 - pitch1, yaw2 - yaw1
+
+        # 선속도와 각속도 계산
+        linear_velocity = Vector3(dx / dt, dy / dt, 0.0)
+        angular_velocity = Vector3(droll / dt, dpitch / dt, dyaw / dt)
+
+        return linear_velocity, angular_velocity
+
+    def get_odom(self):
+        odom = Odometry()
+
+        ee_pose = self.move_group.get_current_pose().pose
+
+        odom.header = Header(frame_id="base_link", stamp=rospy.Time.now())
+
+        quat = [
+            ee_pose.orientation.x,
+            ee_pose.orientation.y,
+            ee_pose.orientation.z,
+            ee_pose.orientation.w,
+        ]  # original quaternion
+        rquat = quaternion_multiply(quat, self.rotate_quat)  # result quaternion
+
+        odom.pose.pose.position = ee_pose.position
+        odom.pose.pose.orientation = Quaternion(
+            x=rquat[0], y=rquat[1], z=rquat[2], w=rquat[3]
+        )
+
+        linear, angular = self.calculate_twist(self.odom, odom)
+
+        odom.twist.twist.linear = linear
+        odom.twist.twist.angular = angular
+
+        return odom
+
+    def publish_odom(self):
+        self.odom = self.get_odom()
+        self.pub.publish(self.odom)
 
     def odom_callback(self, msg: Odometry):
         """This callback function input nav_msgs.msg.Odometry and update robot's state"""
@@ -52,12 +127,13 @@ class EndEffectorState(AbstractState):
 def main():
     rospy.init_node("end_effector_state_node", anonymous=True)
 
-    move_group = moveit_commander.MoveGroupCommander("ARM")  # 플래닝 그룹 이름
+    end_effector_state = EndEffectorState("/odometry/end_effector")
 
-    r = rospy.Rate(1)
+    r = rospy.Rate(10)
     while not rospy.is_shutdown():
-        ee_pose = move_group.get_current_pose().pose
-        print(ee_pose)
+
+        end_effector_state.publish_odom()
+
         r.sleep()
 
 

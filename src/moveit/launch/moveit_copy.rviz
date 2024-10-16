@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /TF1/Tree1
         - /MotionPlanning1/Planning Request1
         - /Odometry1/Shape1
       Splitter Ratio: 0.5
@@ -42,38 +43,12 @@ Visualization Manager:
       Reference Frame: <Fixed Frame>
       Value: true
     - Class: rviz/TF
-      Enabled: true
+      Enabled: false
       Filter (blacklist): ""
       Filter (whitelist): ""
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        base:
-          Value: true
-        base_link:
-          Value: false
-        base_link_inertia:
-          Value: false
-        camera:
-          Value: true
-        flange:
-          Value: false
-        forearm_link:
-          Value: false
-        map:
-          Value: false
-        shoulder_link:
-          Value: false
-        tool0:
-          Value: false
-        upper_arm_link:
-          Value: false
-        wrist_1_link:
-          Value: false
-        wrist_2_link:
-          Value: false
-        wrist_3_link:
-          Value: true
       Marker Alpha: 1
       Marker Scale: 1
       Name: TF
@@ -81,24 +56,9 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        map:
-          base_link:
-            base:
-              {}
-            base_link_inertia:
-              shoulder_link:
-                upper_arm_link:
-                  forearm_link:
-                    wrist_1_link:
-                      wrist_2_link:
-                        wrist_3_link:
-                          camera:
-                            {}
-                          flange:
-                            tool0:
-                              {}
+        {}
       Update Interval: 0
-      Value: true
+      Value: false
     - Acceleration_Scaling_Factor: 0.1
       Class: moveit_rviz_plugin/MotionPlanning
       Enabled: false
@@ -206,7 +166,7 @@ Visualization Manager:
         Interactive Marker Size: 0
         Joint Violation Color: 255; 0; 255
         Planning Group: ENDEFFECTOR
-        Query Goal State: false
+        Query Goal State: true
         Query Start State: false
         Show Workspace: false
         Start State Alpha: 1
@@ -292,6 +252,30 @@ Visualization Manager:
         box: true
       Queue Size: 100
       Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 25; 255; 0
+      Enabled: false
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Lines
+      Line Width: 0.029999999329447746
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 10
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /intention/trajectory
+      Unreliable: false
+      Value: false
     - Angle Tolerance: 0.10000000149011612
       Class: rviz/Odometry
       Covariance:
@@ -355,7 +339,7 @@ Visualization Manager:
       Pitch: 0
       Point towards: +x axis
       Position:
-        X: 0
+        X: -1.2000000476837158
         Y: 0
         Z: 0
       Roll: 0
@@ -371,12 +355,12 @@ Window Geometry:
   Hide Left Dock: true
   Hide Right Dock: true
   MotionPlanning:
-    collapsed: true
+    collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd00000002000000000000015600000391fc0200000005fb000000100044006900730070006c006100790073000000003b00000391000000c700fffffffb0000000800480065006c00700000000342000000bb0000006e00fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000374000001890000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff000000160000001600000001000001ca00000391fc0200000001fc0000003b000003910000000000fffffffaffffffff0100000002fb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e00670000000000ffffffff000001ca00fffffffb0000000a0056006900650077007300000006390000013b0000010000ffffff000002d10000039100000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000200000000000001e500000391fc0200000006fb000000100044006900730070006c006100790073000000003b00000391000000c700fffffffb0000000800480065006c00700000000342000000bb0000006e00fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000374000001890000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000001600000016fb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff000000000000000000000001000001ca00000391fc0200000002fb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067000000003b000001740000016900fffffffb0000000a00560069006500770073000000003b00000391000000a000ffffff000007740000039100000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Views:
     collapsed: true
-  Width: 721
+  Width: 1908
   X: -32
   Y: -32

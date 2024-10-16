@@ -34,6 +34,12 @@ class EndEffectorState(AbstractFState):
         super().__init__(topic)
 
         self.last_time = rospy.Time.now()
+        self.last_odom = Odometry()
+
+        self.odom_sub = rospy.Subscriber(topic, Odometry, self.odom_callback)
+        self.test_pub = rospy.Publisher("/test", Vector3, queue_size=10)
+
+        self.register_observer(self.calculate_covariance)
 
     # observer pattern
     def register_observer(self, observer_callback):
@@ -55,6 +61,8 @@ class EndEffectorState(AbstractFState):
 
         self.notify_observers()  # call all observers
 
+        self.last_odom = self.data
+
     def calculate_covariance(self):
         """Automatically called after odom_callback"""
         pass
@@ -63,14 +71,24 @@ class EndEffectorState(AbstractFState):
         """Automatically called after odom_callback"""
         # Logic
         # Calculate delta time
+
         current_time = rospy.Time.now()
         dt = (current_time - self.last_time).to_sec()
+        dt = 0.1
 
         # Update linear acceleration
-        linear_velocity = self.data.twist.twist.linear
-        self.linear_acceleration = Vector3(
-            x=linear_velocity.x / dt, y=linear_velocity.y / dt, z=linear_velocity.z / dt
-        )
+        current_linear_velocity = self.data.twist.twist.linear
+        last_linear_velocity = self.last_odom.twist.twist.linear
+
+        x = (current_linear_velocity.x - last_linear_velocity.x) / dt
+        y = (current_linear_velocity.y - last_linear_velocity.y) / dt
+        z = (
+            np.linalg.norm([current_linear_velocity.x, current_linear_velocity.y])
+            - np.linalg.norm([last_linear_velocity.x, last_linear_velocity.y])
+        ) / dt
+        size = np.linalg.norm([x, y])
+
+        self.linear_acceleration = Vector3(x=x, y=y, z=z)
 
         # Update last time
         self.last_time = current_time
@@ -203,4 +221,20 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    rospy.init_node("real_intention_image_node")
+
+    end_effector = EndEffectorState(topic="/odometry/end_effector")
+
+    r = rospy.Rate(10)
+    while not rospy.is_shutdown():
+        end_effector.test_pub.publish(end_effector.linear_acceleration)
+        if (
+            end_effector.linear_acceleration.x != 0.0
+            or end_effector.linear_acceleration.y != 0.0
+            or end_effector.linear_acceleration.z != 0.0
+        ):
+            # print(end_effector.linear_acceleration)
+            # print(end_effector.data.twist.twist.linear)
+            # print("\n")
+            pass
+        r.sleep()

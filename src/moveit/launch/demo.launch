@@ -64,4 +64,7 @@
     <arg name="moveit_warehouse_database_path" value="$(arg db_path)"/>
   </include>
 
+  <!-- 0.5, -0.5, -0.5, 0.5 -->
+  <node pkg="tf" type="static_transform_publisher" name="camera" args="0.0 0.0 0.0 0.5 -0.5 0.5 0.5 wrist_3_link camera 100" />
+
 </launch>

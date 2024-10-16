@@ -1,0 +1,22 @@
+  Views:
+    Current:
+      Class: rviz/FrameAligned
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Invert Z Axis: false
+      Lock Camera: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0
+      Point towards: +x axis
+      Position:
+        X: 0
+        Y: 0
+        Z: 0
+      Roll: 0
+      Target Frame: camera
+      Yaw: 0
+    Saved: ~
