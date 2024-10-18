@@ -65,7 +65,7 @@
   </include>
 
   <!-- 0.5, -0.5, -0.5, 0.5 -->
-  <node pkg="tf" type="static_transform_publisher" name="camera" args="0.0 0.0 0.0 0.5 -0.5 0.5 0.5 wrist_3_link camera 100" />
-  <node pkg="tf" type="static_transform_publisher" name="world" args="0.0 0.0 0.0 0.0 0.0 0.0 1.0 world map 100" />
+  <!-- <node pkg="tf" type="static_transform_publisher" name="camera" args="0.0 0.0 0.0 0.5 -0.5 0.5 0.5 wrist_3_link camera 100" /> -->
+  <!-- <node pkg="tf" type="static_transform_publisher" name="world" args="0.0 0.0 0.0 0.0 0.0 0.0 1.0 world map 100" /> -->
 
 </launch>

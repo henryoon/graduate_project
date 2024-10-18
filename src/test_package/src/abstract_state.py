@@ -2,8 +2,9 @@
 
 import os
 import sys
-import rospy
 from abc import ABC, abstractmethod
+import rospy
+import tf
 
 # Messages
 from std_msgs.msg import *
@@ -12,55 +13,54 @@ from geometry_msgs.msg import *
 from nav_msgs.msg import *
 
 
-class State(ABC):
-    """State of End-Effector"""
+class Localization(ABC):
+    def __init__(self, topic: str, frame_id: str):
+        super().__init__()
 
-    def __init__(self, topic: str):
-        self.data = None  # type: Odometry
+        # Basic information
+        self.topic = topic
+        self.frame_id = frame_id
 
-        self._observers = []
+        # TF
+        self.tf_broadcaster = tf.TransformBroadcaster()
+        self.tf_listener = tf.TransformListener()
 
-    @abstractmethod
+
+class State(Localization):
+    def __init__(self, topic: str, frame_id: str):
+        super().__init__(topic, frame_id)
+
+        self.data = None
+        self.transformed_pose = None
+
+        if self.topic is not None:
+            self.subscriber = rospy.Subscriber(
+                self.topic, Odometry, self.odom_callback, queue_size=1
+            )
+
     def odom_callback(self, msg: Odometry):
-        """This callback function input nav_msgs.msg.Odometry and update robot's state"""
         if not isinstance(msg, Odometry):
-            rospy.logerr("Received message is not of type Odometry")
-            return
+            rospy.logerr("Invalid message type")
 
-        self.notify_observers()
+        self.data = msg
+        self.get_target_frame_pose()
 
-    @abstractmethod
-    def register_observer(self, observer_callback):
-        self._observers.append(observer_callback)
+    def get_target_frame_pose(self):
+        """Get position and orientation of specified frame_id"""
+        # if self.data.header.frame_id == self.frame_id:
+        #     self.transformed_pose = self.data.pose
+        #     return self.transformed_pose
 
-    @abstractmethod
-    def notify_observers(self):
-        """Call all observers function when this function is called"""
-        for observer in self._observers:
-            observer()
+        if self.tf_listener.canTransform("map", self.frame_id, time=rospy.Time()):
+            origin_pose = PoseStamped()
+            origin_pose.header = Header(frame_id=self.frame_id, stamp=rospy.Time())
+            origin_pose.pose.orientation.w = 1.0  # Base Pose
 
+            transfromed_pose = self.tf_listener.transformPose("map", origin_pose)
 
-class TargetObject(ABC):
-    """{
-        pose:
-            position:
-                x: float64
-                y: float64
-                z: float64
-            orientation:
-                x: float64
-                y: float64
-                z: float64
-                w: float64
-        scale:
-            x: float64
-            y: float64
-            z: float64
-        id: uint8
-    }"""
+            self.transformed_pose = transfromed_pose
 
-    # TODO: Replace this abstract class to ros message
-    def __init__(self, **kargs):
-        self.pose = kargs.get("pose", Pose())
-        self.scale = kargs.get("scale", Vector3())
-        self.id = kargs.get("id", 0)
+            return self.transformed_pose
+        else:
+            rospy.logerr("Cannot get transform from map to {}".format(self.frame_id))
+            return None

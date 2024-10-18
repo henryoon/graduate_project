@@ -28,12 +28,12 @@ from custom_msgs.msg import *
 # Custom
 try:
     sys.path.append(roslib.packages.get_pkg_dir("test_package") + "/src")
-    from abstract_state import State as AbstractState
+    from abstract_state import State
 except roslib.exceptions.ROSLibException:
     rospy.logfatal("Cannot find package test_package")
     sys.exit(1)
 
-
+"""
 class EndEffectorState(AbstractState):
     def __init__(self, topic):
         super().__init__(topic)
@@ -54,6 +54,7 @@ class EndEffectorState(AbstractState):
 
     def notify_observers(self):
         return super().notify_observers()
+"""
 
 
 class BoxesState:
@@ -79,29 +80,108 @@ class BoxesState:
 class ReadIntentionTraj:
     def __init__(self):
         self.boxes = BoxesState()
-        self.end_effector = EndEffectorState("/odometry/end_effector")
+        self.end_effector = State(None, "wrist_3_link")
 
         # Moveit
         self.move_group = moveit_commander.MoveGroupCommander(
             "ENDEFFECTOR"
         )  # 플래닝 그룹 이름
+
+        # Path
         self.path_pub = rospy.Publisher("/real_intention/path", Path, queue_size=1)
         self.path_marker_pub = rospy.Publisher(
             "/real_intention_trajectory", MarkerArray, queue_size=1
         )
 
-    def traj_to_path(self):
+        # Action listener
+        self.service = rospy.Subscriber(
+            "/real_intention/generate_path_service", Empty, self.action_callback
+        )
+
+        # Local variables
+        self.paths = []
+        self.markers = MarkerArray()
+        self.last_target_idx = 0
+
+    def run(self):
+
+        self.end_effector.get_target_frame_pose()
+
+        best_idx = self.get_best_path()
+
+        if best_idx == -1:
+            rospy.logerr("No path is available")
+            return
+
+        best_path = self.paths[best_idx]
+
+        self.path_marker_pub.publish(self.markers)
+        self.path_pub.publish(best_path)
+
+    def action_callback(self, msg):
+        self.paths = self.calculate_traj()
+        self.markers = parse_marker(self.paths)
+
+        self.path_marker_pub.publish(self.markers)
+
+    def get_best_path(self):
+        min_distance = float("inf")
+        best_path_idx = -1
+
+        for idx, path in enumerate(self.paths):
+            _, dist = self.calculate_target_idx_and_distance(path, self.last_target_idx)
+
+            print(dist)
+
+            if dist < min_distance:
+                min_distance = dist
+                best_path_idx = idx
+
+        return best_path_idx
+
+    def calculate_target_idx_and_distance(self, path: Path, last_target_idx: int):
+        current_pose = self.end_effector.transformed_pose.pose
+        poses = path.poses
+
+        if current_pose is None or path is None:
+            rospy.logerr("Current pose or path is not available")
+            return None
+
+        min_dist = float("inf")
+
+        for i in range(0, len(poses)):
+            pose = poses[i].pose
+
+            dist = np.sqrt(
+                (pose.position.x - current_pose.position.x) ** 2
+                + (pose.position.y - current_pose.position.y) ** 2
+                + (pose.position.z - current_pose.position.z) ** 2
+            )
+
+            if dist < min_dist and dist != 0.0:
+                min_dist = dist
+
+        return 0, min_dist
+
+    def publish_paths(self):
         paths = self.calculate_traj()
         marker_paths = parse_marker(paths)
 
         if len(paths) > 0:
-            self.path_pub.publish(paths[0])
+            # self.path_pub.publish(paths[0])
             self.path_marker_pub.publish(marker_paths)
 
     def calculate_traj(self):
         paths = []
 
-        if self.end_effector.data is None:
+        """
+        if self.end_effector.transformed_pose is None:
+            rospy.logerr("End effector pose is not available")
+            return []
+        """
+
+        end_effector_pose = self.end_effector.get_target_frame_pose()
+        if end_effector_pose is None:
             return []
 
         for box in self.boxes.data.boxes:
@@ -110,27 +190,27 @@ class ReadIntentionTraj:
             path.header.stamp = rospy.Time.now()
 
             x = [
-                self.end_effector.data.pose.pose.position.x,
-                self.end_effector.data.pose.pose.position.x,
+                end_effector_pose.pose.position.x,
+                end_effector_pose.pose.position.x,
                 box.pose.position.x,
             ]
             y = [
-                self.end_effector.data.pose.pose.position.y,
+                end_effector_pose.pose.position.y,
                 box.pose.position.y,
                 box.pose.position.y,
             ]
             z = [
-                self.end_effector.data.pose.pose.position.z,
+                end_effector_pose.pose.position.z,
                 box.pose.position.z,
                 box.pose.position.z,
             ]
 
             origin = euler_from_quaternion(
                 [
-                    self.end_effector.data.pose.pose.orientation.x,
-                    self.end_effector.data.pose.pose.orientation.y,
-                    self.end_effector.data.pose.pose.orientation.z,
-                    self.end_effector.data.pose.pose.orientation.w,
+                    end_effector_pose.pose.orientation.x,
+                    end_effector_pose.pose.orientation.y,
+                    end_effector_pose.pose.orientation.z,
+                    end_effector_pose.pose.orientation.w,
                 ]
             )
             rpy = [
@@ -193,7 +273,7 @@ def parse_marker(paths):
 
         marker.pose.orientation.w = 1.0
         marker.scale.x = 0.005  # Line width
-        marker.color.a = 0.5
+        marker.color.a = 0.3
         marker.color.r = 0.0
         marker.color.g = 1.0
         marker.color.b = 0.0
@@ -211,10 +291,12 @@ def main():
 
     real_intention = ReadIntentionTraj()
 
-    r = rospy.Rate(1)
+    r = rospy.Rate(10)
     while not rospy.is_shutdown():
 
-        real_intention.traj_to_path()
+        # real_intention.publish_paths()
+        real_intention.run()
+        # real_intention.path_marker_pub.publish(real_intention.markers)
 
         r.sleep()
 

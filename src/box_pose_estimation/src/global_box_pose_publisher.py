@@ -17,9 +17,11 @@ import json
 
 class GlobalBoxPosePublisher:
     def __init__(self):
+        # Load virtual boxes data from json file
         self.boxes = self.load_boxes_from_json(
             "/home/catkin_ws/src/box_pose_estimation/resource/virtual_boxes_data.json"
         )
+
         self.marker_array = self.parse_box_to_marker_array()
 
         self.data_pub = rospy.Publisher(
