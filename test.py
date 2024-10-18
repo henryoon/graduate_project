@@ -24,23 +24,10 @@ from nav_msgs.msg import *
 from custom_msgs.msg import *
 
 
+import rviz
+
 rospy.init_node("test_node")
 
-tf_pub = tf.TransformBroadcaster()
 
-d90 = np.pi / 2.0
-
-quat = quaternion_from_euler(d90, -d90, 0)
-
-print(quat)
-
-r = rospy.Rate(100)
-while not rospy.is_shutdown():
-    tf_pub.sendTransform(
-        translation=(0, 0, 0),
-        rotation=quat,
-        time=rospy.Time.now(),
-        parent="wrist_3_link",
-        child="camera",
-    )
-    r.sleep()
+rviz_frame = rviz.VisualizationFrame()
+rviz_frame.setWindowTitle("My RViz Window")
