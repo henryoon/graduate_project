@@ -7,8 +7,6 @@ import roslib.packages
 import rospy
 import roslib
 import numpy as np
-import cv2
-from cv_bridge import CvBridge
 from abc import ABC, abstractmethod
 
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
@@ -33,29 +31,6 @@ except roslib.exceptions.ROSLibException:
     rospy.logfatal("Cannot find package test_package")
     sys.exit(1)
 
-"""
-class EndEffectorState(AbstractState):
-    def __init__(self, topic):
-        super().__init__(topic)
-
-        self.odom_sub = rospy.Subscriber(topic, Odometry, self.odom_callback)
-
-    def odom_callback(self, msg):
-        if not isinstance(msg, Odometry):
-            rospy.logerr("Received message is not of type Odometry")
-            return
-
-        self.data = msg
-
-        self.notify_observers()
-
-    def register_observer(self, observer_callback):
-        return super().register_observer(observer_callback)
-
-    def notify_observers(self):
-        return super().notify_observers()
-"""
-
 
 class BoxesState:
     def __init__(self):
@@ -77,197 +52,182 @@ class BoxesState:
         self.boxes_sub.unregister()
 
 
-class ReadIntentionTraj:
-    def __init__(self):
+class Intention(ABC):
+    def __init__(self, state_topic: str, target_object_topic: str):
         self.boxes = BoxesState()
-        self.end_effector = State(None, "wrist_3_link")
+        self.end_effector = State(state_topic, "wrist_3_link")
 
-        # Moveit
-        self.move_group = moveit_commander.MoveGroupCommander(
-            "ENDEFFECTOR"
-        )  # 플래닝 그룹 이름
-
-        # Path
-        self.path_pub = rospy.Publisher("/real_intention/path", Path, queue_size=1)
-        self.path_marker_pub = rospy.Publisher(
-            "/real_intention_trajectory", MarkerArray, queue_size=1
+        self.target_object_pub = rospy.Publisher(
+            target_object_topic, BoxObject, queue_size=1
         )
 
-        # Action listener
-        self.service = rospy.Subscriber(
-            "/real_intention/generate_path_service", Empty, self.action_callback
+    @abstractmethod
+    def calculate_confidence(self, objects):
+        return 0.0
+
+    @abstractmethod
+    def recognize_target_object(self):
+        target_object = max(
+            self.boxes.data.boxes, key=lambda box: self.calculate_confidence(box)
+        )
+        return target_object
+
+
+class Trajectory(object):
+    def __init__(self, state: State, target_object: BoxObject):
+        self.state = state
+        self.target_object = target_object
+        self.target_idx = 0
+
+        self.path = self.create_path_from_state_and_target_object(
+            self.state, self.target_object
+        )
+        self.marker_path = self.parse_marker(self.path)
+
+    def reset(self):
+        self.__init__(self.state, self.target_object)
+
+    def calculate_confidence(self):
+        self.target_idx = self.calculate_target_idx(last_target_idx=self.target_idx)
+
+        target_err = self.calculate_target_err(target_idx=self.target_idx)
+
+        return 1.0 / target_err
+
+    def calculate_distance_err(self, pose: PoseStamped):
+        dist = np.sqrt(
+            (pose.pose.position.x - self.state.transformed_pose.pose.position.x) ** 2
+            + (pose.pose.position.y - self.state.transformed_pose.pose.position.y) ** 2
+            + (pose.pose.position.z - self.state.transformed_pose.pose.position.z) ** 2
         )
 
-        # Local variables
-        self.paths = []
-        self.markers = MarkerArray()
-        self.last_target_idx = 0
+        return dist
 
-    def run(self):
+    def calculate_orientation_err(self, pose: PoseStamped):
+        current_pose = self.state.transformed_pose.pose
+        target_pose = pose.pose
 
-        self.end_effector.get_target_frame_pose()
+        cr, cp, cy = euler_from_quaternion(
+            [
+                current_pose.orientation.x,
+                current_pose.orientation.y,
+                current_pose.orientation.z,
+                current_pose.orientation.w,
+            ]
+        )
 
-        best_idx = self.get_best_path()
+        tr, tp, ty = euler_from_quaternion(
+            [
+                target_pose.orientation.x,
+                target_pose.orientation.y,
+                target_pose.orientation.z,
+                target_pose.orientation.w,
+            ]
+        )
 
-        if best_idx == -1:
-            rospy.logerr("No path is available")
-            return
+        return cr - tr, cp - tp, cy - ty
 
-        best_path = self.paths[best_idx]
+    def calculate_target_idx(self, last_target_idx: int):
+        dists = []
+        for i, pose in enumerate(self.path.poses):
+            dist = self.calculate_distance_err(pose)
+            dists.append(dist if i >= last_target_idx else float("inf"))
 
-        self.path_marker_pub.publish(self.markers)
-        self.path_pub.publish(best_path)
+        return np.argmin(dists)
 
-    def action_callback(self, msg):
-        self.paths = self.calculate_traj()
-        self.markers = parse_marker(self.paths)
+    def calculate_target_err(self, target_idx: int):
+        target_pose = self.path.poses[target_idx]
 
-        self.path_marker_pub.publish(self.markers)
+        distance_err = self.calculate_distance_err(target_pose)
+        r_err, p_err, y_err = self.calculate_orientation_err(target_pose)
 
-    def get_best_path(self):
-        min_distance = float("inf")
-        best_path_idx = -1
+        # TODO: Calculate the error
+        return distance_err + 0.001  # test
 
-        for idx, path in enumerate(self.paths):
-            _, dist = self.calculate_target_idx_and_distance(path, self.last_target_idx)
+    def create_path_from_state_and_target_object(
+        self, state: State, target_object: BoxObject
+    ):
+        header = Header(frame_id="map", stamp=rospy.Time.now())
+        path = Path(header=header)  # initialize Path message
 
-            print(dist)
+        end_effector_pose = state.transformed_pose
 
-            if dist < min_distance:
-                min_distance = dist
-                best_path_idx = idx
-
-        return best_path_idx
-
-    def calculate_target_idx_and_distance(self, path: Path, last_target_idx: int):
-        current_pose = self.end_effector.transformed_pose.pose
-        poses = path.poses
-
-        if current_pose is None or path is None:
-            rospy.logerr("Current pose or path is not available")
-            return None
-
-        min_dist = float("inf")
-
-        for i in range(0, len(poses)):
-            pose = poses[i].pose
-
-            dist = np.sqrt(
-                (pose.position.x - current_pose.position.x) ** 2
-                + (pose.position.y - current_pose.position.y) ** 2
-                + (pose.position.z - current_pose.position.z) ** 2
-            )
-
-            if dist < min_dist and dist != 0.0:
-                min_dist = dist
-
-        return 0, min_dist
-
-    def publish_paths(self):
-        paths = self.calculate_traj()
-        marker_paths = parse_marker(paths)
-
-        if len(paths) > 0:
-            # self.path_pub.publish(paths[0])
-            self.path_marker_pub.publish(marker_paths)
-
-    def calculate_traj(self):
-        paths = []
-
-        """
-        if self.end_effector.transformed_pose is None:
-            rospy.logerr("End effector pose is not available")
-            return []
-        """
-
-        end_effector_pose = self.end_effector.get_target_frame_pose()
+        # If end effector pose is not available, return empty path
         if end_effector_pose is None:
-            return []
+            return path
 
-        for box in self.boxes.data.boxes:
-            path = Path()
-            path.header.frame_id = "map"
-            path.header.stamp = rospy.Time.now()
+        # X, Y, Z are [end_effector_pose, target_object_pose on YZ plane, target_object_pose]
+        x = [
+            end_effector_pose.pose.position.x,
+            end_effector_pose.pose.position.x,
+            target_object.pose.position.x,
+        ]
+        y = [
+            end_effector_pose.pose.position.y,
+            target_object.pose.position.y,
+            target_object.pose.position.y,
+        ]
+        z = [
+            end_effector_pose.pose.position.z,
+            target_object.pose.position.z,
+            target_object.pose.position.z,
+        ]
 
-            x = [
-                end_effector_pose.pose.position.x,
-                end_effector_pose.pose.position.x,
-                box.pose.position.x,
+        # Get the orientation of the end effector
+        origin = euler_from_quaternion(
+            [
+                end_effector_pose.pose.orientation.x,
+                end_effector_pose.pose.orientation.y,
+                end_effector_pose.pose.orientation.z,
+                end_effector_pose.pose.orientation.w,
             ]
-            y = [
-                end_effector_pose.pose.position.y,
-                box.pose.position.y,
-                box.pose.position.y,
-            ]
-            z = [
-                end_effector_pose.pose.position.z,
-                box.pose.position.z,
-                box.pose.position.z,
-            ]
+        )
+        rpy = [
+            origin,
+            [0.0, np.pi / 2.0, 0.0],
+            [0.0, np.pi / 2.0, 0.0],
+        ]
 
-            origin = euler_from_quaternion(
-                [
-                    end_effector_pose.pose.orientation.x,
-                    end_effector_pose.pose.orientation.y,
-                    end_effector_pose.pose.orientation.z,
-                    end_effector_pose.pose.orientation.w,
-                ]
-            )
-            rpy = [
-                origin,
-                [0.0, np.pi / 2.0, 0.0],
-                [0.0, np.pi / 2.0, 0.0],
-            ]
+        roll = [r for r, _, _ in rpy]
+        pitch = [p for _, p, _ in rpy]
+        yaw = [y for _, _, y in rpy]
 
-            roll = [r for r, _, _ in rpy]
-            pitch = [p for _, p, _ in rpy]
-            yaw = [y for _, _, y in rpy]
+        # 각 축과 각도에 대해 Cubic Spline 보간기를 만듭니다.
+        t = np.linspace(0, 1, len(x))  # 시간 축 (균일한 간격)
+        spline_x = CubicSpline(t, x)
+        spline_y = CubicSpline(t, y)
+        spline_z = CubicSpline(t, z)
+        spline_roll = CubicSpline(t, roll)
+        spline_pitch = CubicSpline(t, pitch)
+        spline_yaw = CubicSpline(t, yaw)
 
-            # 각 축과 각도에 대해 Cubic Spline 보간기를 만듭니다.
-            t = np.linspace(0, 1, len(x))  # 시간 축 (균일한 간격)
-            spline_x = CubicSpline(t, x)
-            spline_y = CubicSpline(t, y)
-            spline_z = CubicSpline(t, z)
-            spline_roll = CubicSpline(t, roll)
-            spline_pitch = CubicSpline(t, pitch)
-            spline_yaw = CubicSpline(t, yaw)
+        # 매끄러운 경로를 생성합니다.
+        t_new = np.linspace(0, 1, 10 * (len(x) - 1))
 
-            # 매끄러운 경로를 생성합니다.
-            t_new = np.linspace(0, 1, 10 * (len(x) - 1))
+        for ti in t_new:
+            xi = spline_x(ti)
+            yi = spline_y(ti)
+            zi = spline_z(ti)
+            ori = spline_roll(ti)
+            opi = spline_pitch(ti)
+            oyi = spline_yaw(ti)
 
-            for ti in t_new:
-                xi = spline_x(ti)
-                yi = spline_y(ti)
-                zi = spline_z(ti)
-                ori = spline_roll(ti)
-                opi = spline_pitch(ti)
-                oyi = spline_yaw(ti)
+            quat = quaternion_from_euler(ori, opi, oyi)
 
-                quat = quaternion_from_euler(ori, opi, oyi)
+            p = PoseStamped()
+            p.header = header
+            p.pose.position = Point(x=xi, y=yi, z=zi)
+            p.pose.orientation = Quaternion(x=quat[0], y=quat[1], z=quat[2], w=quat[3])
 
-                p = PoseStamped()
-                p.header = Header(frame_id="map", stamp=rospy.Time.now())
-                p.pose.position = Point(x=xi, y=yi, z=zi)
-                p.pose.orientation = Quaternion(
-                    x=quat[0], y=quat[1], z=quat[2], w=quat[3]
-                )
+            path.poses.append(p)
 
-                path.poses.append(p)
+        return path
 
-            paths.append(path)
-            # break
-
-        return paths
-
-
-def parse_marker(paths):
-    marker_array = MarkerArray()
-
-    for i, path in enumerate(paths):
+    def parse_marker(self, path: Path):
         marker = Marker()
         marker.header = path.header
         marker.ns = "trajectory"
-        marker.id = i
+        marker.id = self.target_object.id
         marker.type = Marker.LINE_STRIP
         marker.action = Marker.ADD
 
@@ -281,22 +241,94 @@ def parse_marker(paths):
         for pose in path.poses:
             marker.points.append(pose.pose.position)
 
-        marker_array.markers.append(marker)
+        return marker
 
-    return marker_array
+    def change_makrer_color(self, r, g, b):
+        self.marker_path.color.r = r
+        self.marker_path.color.g = g
+        self.marker_path.color.b = b
+
+        return self.marker_path
+
+
+class RealIntentionTraj(Intention):
+    def __init__(
+        self,
+        state_topic: str,
+        target_object_topic: str = "/target_object/real_intention_traj",
+    ):
+        super().__init__(state_topic, target_object_topic)
+
+        # Local variables
+        self.trajs = []
+
+        # Path publisher
+        self.path_pub = rospy.Publisher("/path/target_object/traj", Path, queue_size=1)
+        self.path_marker_pub = rospy.Publisher(
+            "/paths/box_objects/traj", MarkerArray, queue_size=1
+        )
+
+        # Action listener
+        self.service = rospy.Subscriber(
+            "/real_intention_traj/generate_path", Empty, self.action_callback
+        )
+
+    # Update the path and markers : TEST
+    def action_callback(self, msg):
+        self.trajs = self.calculate_trajs()
+
+        marker_array = MarkerArray()
+        for traj in self.trajs:
+            marker_array.markers.append(traj.marker_path)
+
+        self.path_marker_pub.publish(marker_array)
+
+    def calculate_trajs(self):
+        trajs = []
+        for box in self.boxes.data.boxes:
+            traj = Trajectory(self.end_effector, box)
+            trajs.append(traj)
+
+        return trajs
+
+    # Abstract methods
+    def calculate_confidence(self, traj: Trajectory):
+        return traj.calculate_confidence()
+
+    # Abstract methods
+    def recognize_target_object(self):
+        if len(self.trajs) == 0:
+            return None
+
+        target_traj = max(self.trajs, key=lambda traj: self.calculate_confidence(traj))
+        return target_traj
+
+    def run(self):
+        # self.end_effector.get_target_frame_pose()
+
+        target_traj = self.recognize_target_object()
+
+        if target_traj is None:
+            rospy.logwarn("No target traj is recognized")
+            return
+
+        self.path_pub.publish(target_traj.path)
 
 
 def main():
     rospy.init_node("read_intention_traj_node", anonymous=True)
 
-    real_intention = ReadIntentionTraj()
+    real_intention = RealIntentionTraj(
+        state_topic="/odometry/test",
+        target_object_topic="/target_object/real_intention_traj",
+    )
 
     r = rospy.Rate(10)
     while not rospy.is_shutdown():
 
-        # real_intention.publish_paths()
+        real_intention.end_effector.get_target_frame_pose()  # TEST
+
         real_intention.run()
-        # real_intention.path_marker_pub.publish(real_intention.markers)
 
         r.sleep()
 
