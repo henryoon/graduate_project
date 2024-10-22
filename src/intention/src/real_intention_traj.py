@@ -9,7 +9,12 @@ import roslib
 import numpy as np
 from abc import ABC, abstractmethod
 
-from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from tf.transformations import (
+    euler_from_quaternion,
+    quaternion_from_euler,
+    quaternion_inverse,
+    quaternion_multiply,
+)
 import moveit_commander
 from scipy.interpolate import CubicSpline
 
@@ -104,28 +109,38 @@ class Trajectory(object):
         return dist
 
     def calculate_orientation_err(self, pose: PoseStamped):
-        current_pose = self.state.transformed_pose.pose
-        target_pose = pose.pose
+        trajectory_data = self.state.trajectory_data
+        target_pose_data = pose.pose.orientation
+        if trajectory_data is None:
+            return 0.0
 
-        cr, cp, cy = euler_from_quaternion(
-            [
-                current_pose.orientation.x,
-                current_pose.orientation.y,
-                current_pose.orientation.z,
-                current_pose.orientation.w,
-            ]
+        trajectory_quat = [
+            trajectory_data.x,
+            trajectory_data.y,
+            trajectory_data.z,
+            trajectory_data.w,
+        ]
+
+        target_pose_quat = [
+            target_pose_data.x,
+            target_pose_data.y,
+            target_pose_data.z,
+            target_pose_data.w,
+        ]
+
+        dquat = quaternion_multiply(
+            quaternion_inverse(trajectory_quat), target_pose_quat
         )
 
-        tr, tp, ty = euler_from_quaternion(
-            [
-                target_pose.orientation.x,
-                target_pose.orientation.y,
-                target_pose.orientation.z,
-                target_pose.orientation.w,
-            ]
-        )
+        r, p, y = euler_from_quaternion(dquat)
 
-        return cr - tr, cp - tp, cy - ty
+        r = self.normalize_angle(r)
+        p = self.normalize_angle(p)
+        y = self.normalize_angle(y)
+
+        ori_err = abs(r) + abs(p) + abs(y)
+
+        return ori_err
 
     def calculate_target_idx(self, last_target_idx: int):
         dists = []
@@ -138,11 +153,14 @@ class Trajectory(object):
     def calculate_target_err(self, target_idx: int):
         target_pose = self.path.poses[target_idx]
 
+        k_distance = 1.0
+        k_orientation = 0.0
+
         distance_err = self.calculate_distance_err(target_pose)
-        r_err, p_err, y_err = self.calculate_orientation_err(target_pose)
+        ori_err = self.calculate_orientation_err(target_pose)
 
         # TODO: Calculate the error
-        return distance_err + 0.001  # test
+        return distance_err * k_distance + ori_err * k_orientation + 0.001  # test
 
     def create_path_from_state_and_target_object(
         self, state: State, target_object: BoxObject
@@ -250,6 +268,20 @@ class Trajectory(object):
 
         return self.marker_path
 
+    def normalize_angle(self, angle):
+        """
+        Normalize an angle to [-pi, pi].
+        :param angle: (float)
+        :return: (float) Angle in radian in [-pi, pi]
+        """
+        while angle > np.pi:
+            angle -= 2.0 * np.pi
+
+        while angle < -np.pi:
+            angle += 2.0 * np.pi
+
+        return angle
+
 
 class RealIntentionTraj(Intention):
     def __init__(
@@ -312,6 +344,7 @@ class RealIntentionTraj(Intention):
             rospy.logwarn("No target traj is recognized")
             return
 
+        print("Target object id: ", target_traj.target_object.id)
         self.path_pub.publish(target_traj.path)
 
 
