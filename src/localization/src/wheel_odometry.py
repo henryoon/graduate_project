@@ -31,11 +31,11 @@ class WheelOdometry:
         # ROS
         self.md_subscriber = rospy.Subscriber("", md_robot_msg1, self.md_callback)
         self.wheel_odom_publisher = rospy.Publisher(
-            "/wheel_odometry/twist", Twist, queue_size=1
+            "/wheel_odometry/twist", TwistWithCovariance, queue_size=1
         )
 
         # Data
-        self.data = Twist()
+        self.data = None
 
         # Parameters
         self.reduction_ratio = rospy.get_param(
@@ -54,14 +54,16 @@ class WheelOdometry:
         v = (motor1_mps + motor2_mps) / 2
         w = (motor2_mps - motor1_mps) / self.wheel_base
 
-        self.twist = Twist(Vector3(v, 0, 0), Vector3(0, 0, w))
+        twist = Twist(linear=Vector3(v, 0, 0), angular=Vector3(0, 0, w))
+
+        self.twist = TwistWithCovariance(twist=twist, covariance=[0.0] * 36)
 
         # Publish
         self.publish(self.twist)
 
         return self.twist
 
-    def publish(self, twist: Twist):
+    def publish(self, twist: TwistWithCovariance):
         self.wheel_odom_publisher.publish(twist)
 
 
@@ -76,5 +78,15 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except rospy.ROSInterruptException:
-        pass
+    except rospy.ROSInterruptException as ros_ex:
+        rospy.logfatal("ROS Interrupted.")
+        rospy.logfatal(ros_ex)
+
+    except Exception as ex:
+        rospy.logfatal("Exception occurred.")
+        rospy.logfatal(ex)
+
+    finally:
+        rospy.loginfo("Shutting down node.")
+        rospy.signal_shutdown("Shutting down node.")
+        sys.exit(0)
