@@ -22,6 +22,7 @@ add_message_files(
    Node.msg
    Edge.msg
    DifferentialEncoder.msg
+   MotorControl.msg
    )
 
 generate_messages(
