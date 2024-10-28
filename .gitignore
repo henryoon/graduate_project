@@ -260,3 +260,4 @@ CATKIN_IGNORE
 # End of https://www.toptal.com/developers/gitignore/api/ros,c++,python
 
 /token.txt
+/src/CMakeLists.txt
