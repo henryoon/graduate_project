@@ -32,33 +32,70 @@ import serial
 
 
 class Packet(ABC):
-    def __init__(self, ID: int):
+    class Direction(enum.Enum):
+        CCW = 0
+        CW = 1
 
+        @classmethod
+        def from_value(cls, value):
+            for member in cls:
+                if member.value == value:
+                    return member.name
+            rospy.logwarn(f"No matching Direction for value: {value}")
+            return "UNKNOWN"
+
+    def __init__(self, ID: int):
         self.HEADER1 = 255
         self.HEADER2 = 254
-
         self.ID = ID
-
-        self.request_packet = self.request_packet()
-        self.feedback_packet = self.feedback_packet()
 
     @abstractmethod
     def create_request_packet(self):
         pass
 
-    @abstractmethod
     def create_feedback_packet(self):
-        pass
+        packet = bytearray(6)
+
+        packet[0] = self.HEADER1
+        packet[1] = self.HEADER2
+        packet[2] = self.ID
+        packet[3] = 2  # DataSize
+        packet[4] = 0  # Temp Checksum
+        packet[5] = 161  # 위치 피드백
+
+        return packet
+
+    def interpret_feedback_packet(self, packet):
+        if packet[0] != self.HEADER1 or packet[1] != self.HEADER2:
+            rospy.logwarn("Header is not correct.")
+            return None
+        if int(packet[5]) != 209:
+            rospy.logwarn("Mode is not correct. Response: {}".format(packet[5]))
+            return None
+
+        id = int(packet[2])
+        direction = int(packet[6])
+        position = int.from_bytes(packet[7:9], byteorder="big") * 0.01  # DEG
+        rpm = int.from_bytes(packet[9:11], byteorder="big") * 0.1  # RPM
+        current = int(packet[11]) * 0.1  # A
+
+        return {
+            "id": id,
+            "direction": direction,
+            "position": position,
+            "rpm": rpm,
+            "current": current,
+        }
 
 
 # 위치, 속도제어 (송신)
 class PositionRPMControlPacket(Packet):
-    class Direction(enum.Enum):
-        CCW = 0
-        CW = 1
-
     def __init__(self, id: int):
         super().__init__(id)
+
+        self.request_packet = self.create_request_packet(
+            direction=self.Direction.CW.value, position=0, rpm=0
+        )
 
     def create_request_packet(self, direction: int, position: float, rpm: float):
         """Direction: 0: CCW, 1: CW\nPosition: DEG\nRPM: RPM"""
@@ -84,23 +121,20 @@ class PositionRPMControlPacket(Packet):
 
         packet[4] = ~(sum(packet) - self.HEADER1 - self.HEADER2) & 0xFF  # Checksum
 
-        return packet
+        self.request_packet = packet
 
-    def create_feedback_packet(self):
-        return None
+        return packet
 
 
 class MotorControlNode(object):
-    def __init__(self, port: str, baudrate: int, motor_id: int):
+    def __init__(self, port: str, baudrate: int, motor_id: int, cmd_vel_topic: str):
+        self.motor_id = motor_id
         self.ser = serial.Serial(port, baudrate, timeout=1)
 
-        self.motor_id = motor_id
-        self.position_rpm_control_packet = PositionRPMControlPacket(self.motor_id)
+        self.packet = PositionRPMControlPacket(id=motor_id)
 
-        self.control_packet = None
-
-        self.cmd_sub = rospy.Subscriber(
-            "motor1/cmd_vel", MotorControl, self.cmd_vel_callback
+        self.motor_cmd_sub = rospy.Subscriber(
+            cmd_vel_topic, MotorControl, self.cmd_vel_callback
         )
 
     def cmd_vel_callback(self, msg: MotorControl):
@@ -112,28 +146,35 @@ class MotorControlNode(object):
         position = msg.position.z
         rpm = msg.rpm.z
 
-        self.control_packet = self.position_rpm_control_packet.create_request_packet(
+        control_packet = self.packet.create_request_packet(
             direction=direction, position=position, rpm=rpm
         )
 
-    def send_serial(self):
-        if self.control_packet is None:
-            rospy.logwarn("Control packet is None.")
-            return None
+    def send_packet(self):
+        if not self.ser.is_open:
+            rospy.logwarn("Serial is not open.")
+            return
 
-        self.ser.write(self.control_packet)
+        self.ser.write(self.packet.request_packet)
 
 
 def main():
     rospy.init_node("motor_control_node")  # TODO: Add node name
 
+    port = rospy.get_param("~port", "/dev/ttyUSB0")
+    baudrate = rospy.get_param("~baudrate", 9600)
+    motor_id = rospy.get_param("~motor_id", 0)
+
     motor_control_node = MotorControlNode(
-        port="/dev/ttyUSB0", baudrate=9600, motor_id=0
+        port=port,
+        baudrate=baudrate,
+        motor_id=motor_id,
+        cmd_vel_topic="/motor1/cmd_vel",
     )
 
-    r = rospy.Rate(30)  # TODO: Add rate
+    r = rospy.Rate(10)  # TODO: Add rate
     while not rospy.is_shutdown():
-        motor_control_node.send_serial()
+        motor_control_node.send_packet()
         r.sleep()
 
 
