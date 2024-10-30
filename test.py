@@ -1,83 +1,66 @@
-data = 18000
+#!/usr/bin/python3
 
-bd = data.to_bytes(2, "big")
+# Basic modules
+import os
+import sys
+import rospy
+import roslib
+import numpy as np
 
-print(type(bd[0]))
-print(bd[1])
+# TF modules
+import tf
+from tf.transformations import (
+    euler_from_quaternion,
+    quaternion_from_euler,
+    quaternion_inverse,
+    quaternion_multiply,
+)
 
-
-ba = bytearray(2)
-
-ba[0] = bd[0]
-import serial
-import threading
-import time
-
-
-def create_packet(p: float, w: float):
-    H1 = 255
-    H2 = 254
-    ID = 0
-    DS = 7
-    MD = 1
-    DI = 0
-    P = int(p / 0.01)  # DEG
-    W = int(w / 0.1)  # RPM
-    CS = ~(ID + DS + MD + DI + P + W) & 0xFF
-
-    data = bytearray(6)
-
-    data[0] = H1  # Header
-    data[1] = H2  # Header
-    data[2] = ID  # ID
-    data[3] = DS  # Data size
-    data[4] = CS  # Checksum
-    data[5] = MD  # Mode
-    data[6]  # Direction (CW, CCW)
-    data[7]  # Position
-    data[8]  # Position
-    data[9]  # Velocity
-    data[10]  # Velocity
-    return data
+# Messages
+from std_msgs.msg import *
+from sensor_msgs.msg import *
+from geometry_msgs.msg import *
+from nav_msgs.msg import *
+from visualization_msgs.msg import *
 
 
-def receive_data(ser: serial.Serial):
-    while True:
-        data = ser.read(6)
-        print(data)
+def main():
+    rospy.init_node("test_node")  # TODO: Add node name
 
-        continue
-        data = ser.read()
-        print(data)
-        idx = 0
-        for i in data:
-            print(i)
-            idx += 1
+    # rospy.spin()
 
-            if idx == 6:
-                idx = 0
-                break
+    pub = rospy.Publisher(
+        "test", PointStamped, queue_size=10
+    )  # TODO: Add publisher topic
+
+    msg = PointStamped()
+
+    msg.header.frame_id = "tool0"
+    msg.header.stamp = rospy.Time.now()
+
+    msg.point.x = -1.0  # 왼쪽 1
+    msg.point.y = -3.0  # 위로 3
+    msg.point.z = 5.0  # 앞으로 5
+
+    msg.header.stamp = rospy.Time.now()
+
+    r = rospy.Rate(1)  # TODO: Add rate
+    while not rospy.is_shutdown():
+
+        pub.publish(msg)
+        r.sleep()
 
 
-def test(ser: serial.Serial):
-    packet = create_packet()
-    print(packet, len(packet))
-    # ser.write(packet)
-    time.sleep(0.1)
-    response = ser.read()
-    # response = ser.read(12)
-    print(response)
-
-
-# if __name__ == "__main__":
-#     # 시리얼 포트 설정 (포트 이름과 보레이트를 실제 환경에 맞게 수정)
-#     ser = serial.Serial("/dev/ttyUSB1", baudrate=9600, timeout=1)
-
-#     thread = threading.Thread(target=receive_data, args=(ser,))
-#     thread.daemon = True
-#     thread.start()
-
-#     while True:
-#         ser.write(create_packet())
-#         time.sleep(0.1)
-#         # test(ser)
+if __name__ == "__main__":
+    try:
+        main()
+    except rospy.ROSInterruptException as ros_ex:
+        rospy.logfatal("ROS Interrupted.")
+        rospy.logfatal(ros_ex)
+    except Exception as ex:
+        rospy.logfatal("Exception occurred.")
+        rospy.logfatal(ex)
+    finally:
+        rospy.loginfo("Shutting down.")
+        rospy.signal_shutdown("Shutting down.")
+        sys.exit(0)

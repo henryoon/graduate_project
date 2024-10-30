@@ -32,20 +32,24 @@ class EEF_State(object):
         self.base_frame = kwargs.get("base_frame", "base_link")
         self.tool_frame = kwargs.get("tool_frame", "tool0")
         self.camera_frame = kwargs.get("camera_frame", "camera_link")
+        self.box_topic = kwargs.get("box_topic", "/tf_C2O")
 
         self.box = None
 
         self.box_subscirber = rospy.Subscriber(
-            "/box_pose", PoseStamped, self.box_callback
+            self.box_topic, PoseArray, self.box_callback
         )
 
-    def box_callback(self, msg: PoseStamped):
+    def box_callback(self, msg: PoseArray):
+        if len(msg.poses) == 0:
+            return None
+
         if self.tf_listener.canTransform(
             self.base_frame, self.camera_frame, rospy.Time(0)
         ):
             box_pose = PoseStamped()
             box_pose.header = Header(frame_id=self.camera_frame, stamp=rospy.Time(0))
-            box_pose.pose = msg.pose
+            box_pose.pose = msg.poses[0]
 
             transformed_box_pose = self.tf_listener.transformPose(
                 self.base_frame, box_pose
@@ -95,6 +99,7 @@ class DataLogger:
         self.base_frame = kwargs.get("base_frame", "base_link")
         self.tool_frame = kwargs.get("tool_frame", "tool0")
         self.camera_frame = kwargs.get("camera_frame", "camera_link")
+        self.box_topic = kwargs.get("box_topic", "/tf_C2O")
 
         self.hz = kwargs.get("hz", 10)
 
@@ -106,6 +111,7 @@ class DataLogger:
             base_frame=self.base_frame,
             tool_frame=self.tool_frame,
             camera_frame=self.camera_frame,
+            box_topic=self.box_topic,
         )
 
     def calculate_eef_pose(self):
@@ -228,7 +234,7 @@ class DataLogger:
             eef_pose, eef_twist, heading = self.calculate_eef_state()
             box = self.eef.box
 
-            if eef_pose is None or eef_twist is None or heading is None or box is None:
+            if eef_pose is None or eef_twist is None or heading is None:
                 warn_txt = "Cannot calculate: "
                 warn_txt += "EEF Pose\t" if eef_pose is None else ""
                 warn_txt += "EEF Twist\t" if eef_twist is None else ""
@@ -252,7 +258,10 @@ class DataLogger:
             # Heading
             txt += f"{heading.orientation.x}, {heading.orientation.y}, {heading.orientation.z}, {heading.orientation.w},"
             # Box
-            txt += f"{box.position.x}, {box.position.y}, {box.position.z}, {box.orientation.x}, {box.orientation.y}, {box.orientation.z}, {box.orientation.w},"
+            if box is not None:
+                txt += f"{box.position.x}, {box.position.y}, {box.position.z}, {box.orientation.x}, {box.orientation.y}, {box.orientation.z}, {box.orientation.w},"
+            else:
+                txt += "0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0".replace(" ", "")
             txt += "\n"
 
             f.write(txt.replace(" ", ""))
@@ -273,6 +282,7 @@ def main():
         base_frame="base_link",
         tool_frame="camera",
         camera_frame="camera",
+        box_topic="/tf_C2O",
         hz=10,
     )
 
