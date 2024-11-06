@@ -261,3 +261,6 @@ CATKIN_IGNORE
 
 /token.txt
 /src/CMakeLists.txt
+
+/pcl-pcl-1.14.1
+*.tar.gz
