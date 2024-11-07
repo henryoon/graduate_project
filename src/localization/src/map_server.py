@@ -73,7 +73,7 @@ def main():
     dir2 = "/home/catkin_ws/src/localization/resources/global_240516_rejectedLoopclosure.pcd"
     pcl_data = get_point_cloud(dir2)
 
-    pcl_msg = parse_point_cloud(pcl_data, "map", intensity=False, jump=10)
+    pcl_msg = parse_point_cloud(pcl_data, "map", intensity=False, jump=30)
 
     r = rospy.Rate(1)  # TODO: Add rate
     while not rospy.is_shutdown():
