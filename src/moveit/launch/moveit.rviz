@@ -51,7 +51,7 @@ Visualization Manager:
       Frames:
         All Enabled: false
         base_link:
-          Value: false
+          Value: true
         camera:
           Value: false
         map:
@@ -180,7 +180,7 @@ Visualization Manager:
         Interactive Marker Size: 0
         Joint Violation Color: 255; 0; 255
         Planning Group: ENDEFFECTOR
-        Query Goal State: false
+        Query Goal State: true
         Query Start State: false
         Show Workspace: false
         Start State Alpha: 1
@@ -330,7 +330,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 9.035555839538574
+      Distance: 2.56941819190979
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -338,17 +338,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.31985676288604736
-        Y: 0.06375253945589066
-        Z: -0.10420439392328262
+        X: 0.2405671775341034
+        Y: -0.40976205468177795
+        Z: 0.26768139004707336
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.4897964000701904
+      Pitch: 0.48979654908180237
       Target Frame: camera
-      Yaw: 6.13539981842041
+      Yaw: 2.560398578643799
     Saved: ~
 Window Geometry:
   Displays:
@@ -366,5 +366,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1908
-  X: -32
-  Y: -32
+  X: 1394
+  Y: 262

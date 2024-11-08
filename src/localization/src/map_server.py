@@ -76,7 +76,7 @@ def main():
     dir3 = "/home/irol/vslam_ws/src/pcd_publisher/pcd_file/global_240516_rejectedLoopclosure.pcd"
     pcl_data = get_point_cloud(dir3)
 
-    pcl_msg = parse_point_cloud(pcl_data, "map", intensity=False, jump=10)
+    pcl_msg = parse_point_cloud(pcl_data, "map", intensity=False, jump=30)
 
     point_cloud2_pub.publish(pcl_msg)
 
