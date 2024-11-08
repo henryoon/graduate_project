@@ -30,7 +30,11 @@ from sensor_msgs import point_cloud2
 
 def get_point_cloud(file_path):
     rospy.loginfo("Reading PCD file...")
-    return pcl.load_XYZI(file_path)
+    rgb_pcd = pcl.load_XYZRGBA(file_path)
+    rgb_pcd = rgb_pcd.to_array()
+    print(rgb_pcd.shape)
+    return rgb_pcd
+    # return pcl.load_XYZI(file_path)
 
 
 def parse_point_cloud(pcl_data, frame_id: str, intensity=True, jump=1):
@@ -43,7 +47,7 @@ def parse_point_cloud(pcl_data, frame_id: str, intensity=True, jump=1):
         PointField("x", 0, PointField.FLOAT32, 1),
         PointField("y", 4, PointField.FLOAT32, 1),
         PointField("z", 8, PointField.FLOAT32, 1),
-        PointField("intensity", 12, PointField.FLOAT32, 1),
+        PointField("rgb", 12, PointField.UINT32, 1),
     ]
 
     if not intensity:
@@ -52,11 +56,9 @@ def parse_point_cloud(pcl_data, frame_id: str, intensity=True, jump=1):
     # PCL 데이터를 파이썬 리스트 형식으로 변환
     points = []
     for i, point in enumerate(pcl_data):
+        # print(point[3])
         if i % jump == 0:
-            if intensity:
-                points.append([point[0], point[1], point[2], point[3]])
-            else:
-                points.append([point[0], point[1], point[2]])
+            points.append([point[0], point[1], point[2], point[3]])
 
     # PointCloud2 메시지 생성
     cloud_msg = point_cloud2.create_cloud(header, fields, points)
@@ -71,11 +73,18 @@ def main():
     # PCD 파일 읽기
     dir1 = "/home/catkin_ws/src/localization/resources/GlobalMap.pcd"
     dir2 = "/home/catkin_ws/src/localization/resources/global_240516_rejectedLoopclosure.pcd"
-    pcl_data = get_point_cloud(dir2)
+    dir3 = "/home/irol/vslam_ws/src/pcd_publisher/pcd_file/global_240516_rejectedLoopclosure.pcd"
+    pcl_data = get_point_cloud(dir3)
 
     pcl_msg = parse_point_cloud(pcl_data, "map", intensity=False, jump=10)
 
-    r = rospy.Rate(1)  # TODO: Add rate
+    point_cloud2_pub.publish(pcl_msg)
+
+    # rospy.spin()
+
+    # return 0
+
+    r = rospy.Rate(5)  # TODO: Add rate
     while not rospy.is_shutdown():
         point_cloud2_pub.publish(pcl_msg)
         r.sleep()

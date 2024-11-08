@@ -1,0 +1,61 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/irol/vslam_ws/devel/include/**",
+        "/opt/ros/noetic/include/**",
+        "/usr/local/include/**",
+        "/home/irol/irol/devel/include/**",
+        "/home/irol/vslam_ws/src/VGC10_control/include/**",
+        "/home/irol/irol/src/apriltag_ros/apriltag_ros/include/**",
+        "/home/irol/vslam_ws/src/collision_detect/include/**",
+        "/home/irol/vslam_ws/src/Universal_Robots_ROS_Driver/controller_stopper/include/**",
+        "/home/irol/irol/src/image_pipeline/depth_image_proc/include/**",
+        "/home/irol/vslam_ws/src/xsens_mtw_wrapper/include/**",
+        "/home/irol/irol/src/image_pipeline/image_proc/include/**",
+        "/home/irol/irol/src/keras/include/**",
+        "/home/irol/vslam_ws/src/local_pcd_viewer/include/**",
+        "/home/irol/vslam_ws/src/MD-ROS/V26/md/include/**",
+        "/home/irol/vslam_ws/src/IROL-Moveit_UR/moveit_servo/include/**",
+        "/home/irol/vslam_ws/src/mtx_driver_stand/include/**",
+        "/home/irol/vslam_ws/src/pcd_publisher/include/**",
+        "/home/irol/vslam_ws/src/pcdtoimage/include/**",
+        "/home/irol/vslam_ws/src/pointcloud_concatenate/include/**",
+        "/home/irol/vslam_ws/src/preprocessing_pointcloud/include/**",
+        "/home/irol/vslam_ws/src/realsense-ros/realsense2_camera/include/**",
+        "/home/irol/vslam_ws/src/roboticsgroup_upatras_gazebo_plugins/include/**",
+        "/home/irol/vslam_ws/src/robotiq/robotiq_2f_gripper_action_server/include/**",
+        "/home/irol/vslam_ws/src/robotiq/robotiq_2f_gripper_control/include/**",
+        "/home/irol/vslam_ws/src/robotiq/robotiq_ethercat/include/**",
+        "/home/irol/vslam_ws/src/robotiq/robotiq_ft_sensor/include/**",
+        "/home/irol/irol/src/rtabmap_ros-noetic-devel/rtabmap_conversions/include/**",
+        "/home/irol/irol/src/rtabmap_ros-noetic-devel/rtabmap_costmap_plugins/include/**",
+        "/home/irol/irol/src/rtabmap_ros-noetic-devel/rtabmap_odom/include/**",
+        "/home/irol/irol/src/rtabmap_ros-noetic-devel/rtabmap_rviz_plugins/include/**",
+        "/home/irol/irol/src/rtabmap_ros-noetic-devel/rtabmap_slam/include/**",
+        "/home/irol/irol/src/rtabmap_ros-noetic-devel/rtabmap_sync/include/**",
+        "/home/irol/irol/src/rtabmap_ros-noetic-devel/rtabmap_util/include/**",
+        "/home/irol/irol/src/rtabmap_ros-noetic-devel/rtabmap_viz/include/**",
+        "/home/irol/irol/src/image_pipeline/stereo_image_proc/include/**",
+        "/home/irol/irol/src/test/include/**",
+        "/home/irol/vslam_ws/src/tf_trans/include/**",
+        "/home/irol/vslam_ws/src/Universal_Robots_ROS_Driver/ur_calibration/include/**",
+        "/home/irol/vslam_ws/src/fmauch_universal_robot/ur_kinematics/include/**",
+        "/home/irol/vslam_ws/src/Universal_Robots_ROS_Driver/ur_robot_driver/include/**",
+        "/home/irol/vslam_ws/src/vrpn_client_ros/include/**",
+        "/home/irol/vslam_ws/src/xsens_mtw_driver_release/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
