@@ -31,9 +31,21 @@ int main(int argc, char** argv)
 
     ROS_INFO("Successfully loaded PCD file with %zu points.", cloud.size());
 
+    // 다운 샘플링 비율 설정 (예: 10의 배수만 남기기)
+    int sampling_rate = 10;
+    pcl::PointCloud<pcl::PointXYZRGB> downsampled_cloud;
+
+    for (size_t i = 0; i < cloud.size(); ++i) {
+        if (i % sampling_rate == 0) {
+            downsampled_cloud.push_back(cloud[i]);
+        }
+    }
+
+    ROS_INFO("Downsampled cloud has %zu points.", downsampled_cloud.size());
+
     // PointCloud2 메시지 생성
     sensor_msgs::PointCloud2 cloud_msg;
-    pcl::toROSMsg(cloud, cloud_msg);
+    pcl::toROSMsg(downsampled_cloud, cloud_msg);
 
     // 헤더 정보 설정
     cloud_msg.header.stamp = ros::Time::now();

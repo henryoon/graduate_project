@@ -24,14 +24,24 @@ from nav_msgs.msg import *
 from visualization_msgs.msg import *
 
 
+def callback(msg: PointCloud2):
+    rospy.loginfo("Callback called.")
+    for field in msg.fields:
+        print(field)
+
+    print("\n")
+
+
 def main():
-    rospy.init_node("")  # TODO: Add node name
+    rospy.init_node("test_node2")  # TODO: Add node name
 
-    # rospy.spin()
+    rospy.Subscriber("/map", PointCloud2, callback)  # TODO: Add subscriber
 
-    r = rospy.Rate()  # TODO: Add rate
-    while not rospy.is_shutdown():
-        r.sleep()
+    rospy.spin()
+
+    # r = rospy.Rate()  # TODO: Add rate
+    # while not rospy.is_shutdown():
+    #     r.sleep()
 
 
 if __name__ == "__main__":
