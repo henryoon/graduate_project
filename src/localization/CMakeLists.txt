@@ -11,6 +11,8 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  sensor_msgs
+  pcl_ros
 )
 
 ## System dependencies are found with CMake's conventions
@@ -73,6 +75,8 @@ find_package(catkin REQUIRED COMPONENTS
 #   std_msgs
 # )
 
+add_executable(pcd_to_pointcloud_node src/pcd_to_pointcloud.cpp)
+
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
 ################################################
@@ -118,6 +122,16 @@ catkin_package(
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+)
+
+target_link_libraries(pcd_to_pointcloud_node
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+)
+
+# Install executables and libraries
+install(TARGETS pcd_to_pointcloud_node
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 ## Declare a C++ library

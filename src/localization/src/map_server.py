@@ -53,10 +53,7 @@ def parse_point_cloud(pcl_data, frame_id: str, intensity=True, jump=1):
     points = []
     for i, point in enumerate(pcl_data):
         if i % jump == 0:
-            if intensity:
-                points.append([point[0], point[1], point[2], point[3]])
-            else:
-                points.append([point[0], point[1], point[2]])
+            points.append([point[0], point[1], point[2], point[3]])
 
     # PointCloud2 메시지 생성
     cloud_msg = point_cloud2.create_cloud(header, fields, points)
