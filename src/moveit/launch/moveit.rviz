@@ -5,7 +5,9 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /TF1
         - /TF1/Frames1
+        - /MotionPlanning1
         - /MotionPlanning1/Planning Request1
       Splitter Ratio: 0.5
     Tree Height: 770
@@ -206,7 +208,7 @@ Visualization Manager:
         Interactive Marker Size: 0
         Joint Violation Color: 255; 0; 255
         Planning Group: ENDEFFECTOR
-        Query Goal State: true
+        Query Goal State: false
         Query Start State: false
         Show Workspace: false
         Start State Alpha: 1
@@ -356,7 +358,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.56941819190979
+      Distance: 4.104867935180664
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -364,17 +366,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.2405671775341034
-        Y: -0.40976205468177795
-        Z: 0.26768139004707336
+        X: 0.1106409803032875
+        Y: 0.008846776559948921
+        Z: 0.3904445767402649
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.48979654908180237
+      Pitch: 1.449796438217163
       Target Frame: camera
-      Yaw: 2.560398578643799
+      Yaw: 1.7953978776931763
     Saved: ~
 Window Geometry:
   Displays:

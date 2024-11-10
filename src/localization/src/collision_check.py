@@ -52,7 +52,7 @@ class EEFState(State):
         super().__init__(topic, frame_id)
 
         self.last_pose = None
-        self.linear_velocity = Vector3(x=0.0, y=0.0, z=0.0)
+        self.velocity = Twist()
         self.last_time = rospy.Time.now()
 
     def odom_callback(self, msg: Odometry):
@@ -63,22 +63,15 @@ class EEFState(State):
 
         self.get_target_frame_pose()
 
-        self.linear_velocity = self.get_linear_velocity(
-            current_pose=self.transformed_pose
-        )
+        self.linear_velocity = self.get_velocity(current_pose=self.transformed_pose)
 
-    def get_linear_velocity(self, current_pose: PoseStamped):
+    def get_velocity(self, current_pose: PoseStamped):
         last_pose = self.last_pose
 
         if current_pose is None or last_pose is None:
             rospy.logwarn("Invalid pose")
             self.last_pose = current_pose
-            return Vector3(x=0.0, y=0.0, z=0.0)
-
-        # Calculate linear velocity
-        dx = current_pose.pose.position.x - last_pose.pose.position.x
-        dy = current_pose.pose.position.y - last_pose.pose.position.y
-        dz = current_pose.pose.position.z - last_pose.pose.position.z
+            return Twist()
 
         # Calculate time difference
         current_time = rospy.Time.now()
@@ -86,13 +79,44 @@ class EEFState(State):
 
         if dt == 0:
             rospy.logwarn("Time difference is zero")
-            return Vector3(x=0.0, y=0.0, z=0.0)
+            return Twist()
 
+        # Calculate linear velocity
+        dx = current_pose.pose.position.x - last_pose.pose.position.x
+        dy = current_pose.pose.position.y - last_pose.pose.position.y
+        dz = current_pose.pose.position.z - last_pose.pose.position.z
+
+        linear_velocity = Vector3(x=dx / dt, y=dy / dt, z=dz / dt)
+
+        # Calculate angular velocity
+        current_quat = [
+            current_pose.pose.orientation.x,
+            current_pose.pose.orientation.y,
+            current_pose.pose.orientation.z,
+            current_pose.pose.orientation.w,
+        ]
+        last_quat = [
+            last_pose.pose.orientation.x,
+            last_pose.pose.orientation.y,
+            last_pose.pose.orientation.z,
+            last_pose.pose.orientation.w,
+        ]
+
+        # Calculate quaternion difference
+        dquat = quaternion_multiply(quaternion_inverse(last_quat), current_quat)
+
+        # Calculate euler angles
+        dx, dy, dz = euler_from_quaternion(dquat)
+
+        angular_velocity = Vector3(x=dx / dt, y=dy / dt, z=dz / dt)
+
+        velocity = Twist(linear=linear_velocity, angular=angular_velocity)
+
+        self.velocity = velocity
         self.last_time = current_time
         self.last_pose = current_pose
 
-        # Calculate linear velocity
-        return Vector3(x=dx / dt, y=dy / dt, z=dz / dt)
+        return velocity
 
 
 class CollisionCheck:
@@ -104,7 +128,7 @@ class CollisionCheck:
         self.scene.clear()
 
         # End Effector State
-        # self.end_effector_state = EEFState("/odom/fake", "camera")
+        self.end_effector_state = EEFState("/odom/fake", "camera")
 
         # Add Collision Objects
         self.create_box(
@@ -162,7 +186,7 @@ class CollisionCheck:
 
         try:
             request = GetStateValidityRequest()
-            request.group_name = "ENDEFFECTOR"
+            request.group_name = "ARM"
             # request.robot_state = self.robot.get_current_state()
             request.robot_state = self.predict_joint_state(1.0)
 
@@ -189,6 +213,8 @@ def main():
 
         is_valid = collision_check.request_state_validity()
         rospy.loginfo(f"State Validity: {is_valid}")
+
+        collision_check.test()
 
         r.sleep()
 
