@@ -57,7 +57,7 @@ class State(Localization):
         if self.transformed_pose is None:
             return None
 
-        dt = (self.transformed_pose.header.stamp - pose.header.stamp).to_sec()
+        # dt = (self.transformed_pose.header.stamp - pose.header.stamp).to_sec()
 
         dx = self.transformed_pose.pose.position.x - pose.pose.position.x
         dy = self.transformed_pose.pose.position.y - pose.pose.position.y
@@ -66,24 +66,6 @@ class State(Localization):
         quat = quaternion_from_euler(dx, dy, dz)
 
         return Quaternion(x=quat[0], y=quat[1], z=quat[2], w=quat[3])
-
-        # quat1 = [
-        #     self.transformed_pose.pose.orientation.x,
-        #     self.transformed_pose.pose.orientation.y,
-        #     self.transformed_pose.pose.orientation.z,
-        #     self.transformed_pose.pose.orientation.w,
-        # ]
-
-        # quat2 = [
-        #     pose.pose.orientation.x,
-        #     pose.pose.orientation.y,
-        #     pose.pose.orientation.z,
-        #     pose.pose.orientation.w,
-        # ]
-
-        # dquat = quaternion_multiply(quaternion_inverse(quat1), quat2)
-
-        # dor, dop, doy = euler_from_quaternion(dquat)
 
     def get_target_frame_pose(self):
         """Get position and orientation of specified frame_id"""
