@@ -10,20 +10,14 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
 )
 
-
-
-add_executable(pcd_to_pointcloud_node src/pcd_to_pointcloud.cpp)
-
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES localization
-#  CATKIN_DEPENDS roscpp rospy std_msgs
-#  DEPENDS system_lib
+ INCLUDE_DIRS include
+ LIBRARIES localization
+ CATKIN_DEPENDS roscpp rospy std_msgs
+ DEPENDS system_lib
 )
 
-###########
-## Build ##
-###########
+
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
@@ -32,13 +26,22 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
+add_executable(pcd_to_pointcloud_node src/pcd_to_pointcloud.cpp)
+add_dependencies(pcd_to_pointcloud_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(pcd_to_pointcloud_node
   ${catkin_LIBRARIES}
-  ${PCL_LIBRARIES}
-)
+) 
 
-# Install executables and libraries
 install(TARGETS pcd_to_pointcloud_node
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
 )
 
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  FILES_MATCHING PATTERN "*.h"
+)
+
+
+# HELLO WORLD!
