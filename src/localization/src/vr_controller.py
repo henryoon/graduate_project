@@ -48,6 +48,8 @@ class URControl:
 
         self.last_button = 0
 
+        self.is_collistion = True
+
         self.right_controller_twist_sub = rospy.Subscriber(
             "/controller/right/twist", Twist, self.right_controller_callback
         )
@@ -61,6 +63,17 @@ class URControl:
         self.spine_pose_sub = rospy.Subscriber(
             "/spine/pose", Pose, self.spine_pose_callback
         )
+
+        self.control_msg_pub = rospy.Publisher(
+            "/control_msg", Float32MultiArray, queue_size=10
+        )
+
+        self.collision_sub = rospy.Subscriber(
+            "/is_collision", Bool, self.collision_callback
+        )
+
+    def collision_callback(self, msg: Bool):
+        self.is_collistion = msg.data
 
     def right_controller_callback(self, msg: Twist):
         self.right_controller_twist = msg
@@ -109,9 +122,9 @@ class URControl:
     def linear_control(self):
         linear_speed = self.right_controller_twist.linear
 
-        linear_speed.x = np.clip(linear_speed.x, -0.1, 0.1)
-        linear_speed.y = np.clip(linear_speed.y, -0.1, 0.1)
-        linear_speed.z = np.clip(linear_speed.z, -0.1, 0.1)
+        linear_speed.x = np.clip(linear_speed.x, -0.5, 0.5)
+        linear_speed.y = np.clip(linear_speed.y, -0.5, 0.5)
+        linear_speed.z = np.clip(linear_speed.z, -0.5, 0.5)
 
         input_data = [linear_speed.y, -linear_speed.x, linear_speed.z, 0, 0, 0]
 
@@ -119,22 +132,28 @@ class URControl:
 
     def angular_control(self):
 
-        input_data = [np.clip(-self.angular_z_speed, -0.1, 0.1), 0, 0, 0, 0, 0]
+        input_data = [np.clip(-self.angular_z_speed, -0.5, 0.5), 0, 0, 0, 0, 0]
 
         return input_data
 
     def control(self):
+        control_msg = Float32MultiArray()
         # 오른손 검지 버튼이 눌렸을 때, 모든 종류의 동작 명령이 기동
+
         if self.right_controller_joy.buttons[3] == 1:
 
             # 왼손 검지 버튼이 눌렸을 때, 회전 명령
             if self.left_controller_joy.buttons[3] == 1:
                 if self.last_button == 0:
                     self.rtde_c.speedL([0, 0, 0, 0, 0, 0], acceleration=0.25)
+                    control_msg.data = [0.0] * 6
+
                 else:
+                    angular_control_msg = self.angular_control()
                     self.rtde_c.speedJ(
-                        self.angular_control(), acceleration=0.25, time=0.05
+                        angular_control_msg, acceleration=0.25, time=0.05
                     )
+                    control_msg.data = angular_control_msg
 
                 self.last_button = 1
 
@@ -142,16 +161,30 @@ class URControl:
             else:
                 if self.last_button == 1:
                     self.rtde_c.speedJ([0, 0, 0, 0, 0, 0], acceleration=0.25, time=0.05)
+                    control_msg.data = [0.0] * 6
+
                 else:
-                    self.rtde_c.speedL(self.linear_control(), acceleration=0.25)
+                    linear_control_msg = self.linear_control()
+                    control_msg.data = linear_control_msg
+
+                    if (
+                        self.is_collistion is False
+                        and self.right_controller_joy.buttons[2] == 0
+                    ):
+                        self.rtde_c.speedL([0, 0, 0, 0, 0, 0], acceleration=0.25)
+
+                        rospy.logwarn("Collision detected.")
+                    else:
+                        self.rtde_c.speedL(linear_control_msg, acceleration=0.25)
 
                 self.last_button = 0
 
         # 오른손 검지 버튼이 눌리지 않았을 때, 정지 명령
         else:
-            # self.rtde_c.stopL(10.0)
             self.rtde_c.speedL([0, 0, 0, 0, 0, 0], acceleration=0.25)
-            return False
+            control_msg.data = [0.0] * 6
+
+        self.control_msg_pub.publish(control_msg)
 
 
 def main():

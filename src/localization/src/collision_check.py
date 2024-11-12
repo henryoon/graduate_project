@@ -123,20 +123,21 @@ class CollisionCheck:
     def __init__(self):
         self.robot = RobotCommander()
         self.scene = PlanningSceneInterface()
-        self.group = MoveGroupCommander("ENDEFFECTOR")
+        self.group = MoveGroupCommander("manipulator")
+
+        self.right_controller_twist = Twist()
+        self.right_controller_joy = Joy()
+        self.right_controller_joy.buttons = [0, 0, 0, 0]
 
         self.scene.clear()
-
-        # End Effector State
-        self.end_effector_state = EEFState("/odom/fake", "camera")
 
         # Add Collision Objects
         self.create_box(
             Pose(
-                position=Point(x=-0.5, y=0.0, z=0.0),
+                position=Point(x=0.0, y=0.7, z=0.0),
                 orientation=Quaternion(x=0.0, y=0.0, z=0.0, w=1.0),
             ),
-            (0.1, 1.0, 1.0),
+            (2.1, 1.0, 2.1),
         )
 
         # GetStateValidity 서비스 클라이언트 설정
@@ -144,6 +145,28 @@ class CollisionCheck:
         self.state_validity_service = rospy.ServiceProxy(
             "/check_state_validity", GetStateValidity
         )
+
+        # 충돌 여부를 판단하는 퍼블리셔 설정
+        self.collision_pub = rospy.Publisher("/is_collision", Bool, queue_size=1)
+
+        # 제어 메시지를 받는 퍼블리셔 설정
+        self.control_msg_sub = rospy.Subscriber(
+            "/control_msg", Float32MultiArray, self.control_msg_callback
+        )
+        self.control_msg = [0.0] * 6
+
+        self.last_max_depth = -1.0
+
+        # self.joint_states_sub = rospy.Subscriber(
+        #     "/joint_states", JointState, self.joint_states_callback
+        # )
+        # self.joint_states = JointState()
+
+    def joint_states_callback(self, msg: JointState):
+        self.joint_states = msg
+
+    def control_msg_callback(self, msg: Float32MultiArray):
+        self.control_msg = msg.data
 
     def create_box(self, pose: Pose, size: tuple):
         # 사용자 정의 오브젝트 생성 & 추가
@@ -153,14 +176,26 @@ class CollisionCheck:
 
         self.scene.add_box("box", object_pose, size=size)
 
+    def change_joint_state_idx(self, value):
+        changed_joint_state = [0.0] * 6
+
+        changed_joint_state[0] = value[2]
+        changed_joint_state[1] = value[1]
+        changed_joint_state[2] = value[0]
+        changed_joint_state[3] = value[3]
+        changed_joint_state[4] = value[4]
+        changed_joint_state[5] = value[5]
+
+        return changed_joint_state
+
     def predict_joint_state(self, delta_time: float):
         current_joint_state = self.robot.get_current_state()
 
         # Get current joint positions and velocities
         current_joint_positions = np.array(current_joint_state.joint_state.position)
-        current_joint_velocities = current_joint_state.joint_state.velocity
-
-        # TODO: Change current_joint_velocities to real values
+        current_joint_velocities = np.array(
+            self.change_joint_state_idx(self.predict_joint_velocities())
+        )
 
         # If joint positions and velocities have different lengths, set velocities to 0
         if len(current_joint_positions) != len(current_joint_velocities):
@@ -185,22 +220,53 @@ class CollisionCheck:
         is_valid = False
 
         try:
-            request = GetStateValidityRequest()
-            request.group_name = "ARM"
-            # request.robot_state = self.robot.get_current_state()
-            request.robot_state = self.predict_joint_state(1.0)
+            current_request = GetStateValidityRequest()
+            current_request.group_name = "manipulator"
+            current_request.robot_state = self.robot.get_current_state()
 
-            response = self.state_validity_service(request)
+            predicted_request = GetStateValidityRequest()
+            predicted_request.group_name = "manipulator"
+            predicted_request.robot_state = self.predict_joint_state(0.1)
 
-            is_valid = response.valid
+            current_valid = self.state_validity_service(current_request)
+            predicted_valid = self.state_validity_service(predicted_request)
+
+            current_max = -1
+            for contact in current_valid.contacts:
+                if contact.depth > current_max:
+                    current_max = contact.depth
+
+            predict_max = -1
+            for contact in predicted_valid.contacts:
+                if contact.depth > predict_max:
+                    predict_max = contact.depth
+
+            print(current_valid)
+            print(current_max, predict_max, predict_max < current_max)
+
+            is_valid = current_valid.valid and predicted_valid.valid
+
         except rospy.ServiceException as service_ex:
             rospy.logerr("Service call failed.")
             rospy.logerr(service_ex)
         except Exception as ex:
             rospy.logerr("Exception occurred.")
             rospy.logerr(ex)
-        finally:
-            return is_valid
+
+        return is_valid
+
+    def predict_joint_velocities(self):
+        joint_values = self.group.get_current_joint_values()
+        J = np.array(self.group.get_jacobian_matrix(joint_values))
+
+        J_inv = np.linalg.pinv(J)
+
+        if len(self.control_msg) != 6:
+            self.control_msg = [0.0] * 6
+
+        joint_velocities = np.dot(J_inv, self.control_msg)
+
+        return joint_velocities
 
 
 def main():
@@ -214,7 +280,7 @@ def main():
         is_valid = collision_check.request_state_validity()
         rospy.loginfo(f"State Validity: {is_valid}")
 
-        collision_check.test()
+        collision_check.collision_pub.publish(is_valid)
 
         r.sleep()
 

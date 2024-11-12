@@ -67,12 +67,10 @@ def main():
     point_cloud2_pub = rospy.Publisher("/map", PointCloud2, queue_size=1)
 
     # PCD 파일 읽기
-    dir1 = "/home/catkin_ws/src/localization/resources/GlobalMap.pcd"
-    dir2 = "/home/catkin_ws/src/localization/resources/global_240516_rejectedLoopclosure.pcd"
-    dir3 = "/home/catkin_ws/src/localization/resources/GlobalMap.pcd"
+    dir2 = "/home/irol/vslam_ws/src/pcd_publisher/pcd_file/241108.pcd"
     pcl_data = get_point_cloud(dir2)
 
-    pcl_msg = parse_point_cloud(pcl_data, "map", intensity=False, jump=30)
+    pcl_msg = parse_point_cloud(pcl_data, "map", intensity=False, jump=100)
 
     point_cloud2_pub.publish(pcl_msg)
 
