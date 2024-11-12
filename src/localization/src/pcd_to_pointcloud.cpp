@@ -15,7 +15,11 @@ int main(int argc, char** argv)
     ros::NodeHandle nh;
 
     // PCD 파일 경로
+<<<<<<< HEAD
     std::string pcd_file = "/home/irol/vslam_ws/src/pcd_publisher/pcd_file/241108.pcd";
+=======
+    std::string pcd_file = "/home/catkin_ws/src/localization/resources/241108.pcd";
+>>>>>>> 4d8f99dbe8b8a566b2374bf5fc1267ff2a12c94c
 
     // PointCloud2 발행을 위한 퍼블리셔 생성
     ros::Publisher cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("/map", 1);
@@ -32,7 +36,11 @@ int main(int argc, char** argv)
     ROS_INFO("Successfully loaded PCD file with %zu points.", cloud.size());
 
     // 다운 샘플링 비율 설정 (예: 10의 배수만 남기기)
+<<<<<<< HEAD
     int sampling_rate = 100;
+=======
+    int sampling_rate = 1;
+>>>>>>> 4d8f99dbe8b8a566b2374bf5fc1267ff2a12c94c
     pcl::PointCloud<pcl::PointXYZRGB> downsampled_cloud;
 
     for (size_t i = 0; i < cloud.size(); ++i) {
