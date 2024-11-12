@@ -15,7 +15,7 @@ int main(int argc, char** argv)
     ros::NodeHandle nh;
 
     // PCD 파일 경로
-    std::string pcd_file = "/home/catkin_ws/src/localization/resources/global_240516_rejectedLoopclosure.pcd";
+    std::string pcd_file = "/home/catkin_ws/src/localization/resources/241108.pcd";
 
     // PointCloud2 발행을 위한 퍼블리셔 생성
     ros::Publisher cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("/map", 1);
@@ -32,7 +32,7 @@ int main(int argc, char** argv)
     ROS_INFO("Successfully loaded PCD file with %zu points.", cloud.size());
 
     // 다운 샘플링 비율 설정 (예: 10의 배수만 남기기)
-    int sampling_rate = 10;
+    int sampling_rate = 1;
     pcl::PointCloud<pcl::PointXYZRGB> downsampled_cloud;
 
     for (size_t i = 0; i < cloud.size(); ++i) {
