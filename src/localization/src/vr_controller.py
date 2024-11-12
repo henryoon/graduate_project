@@ -167,15 +167,7 @@ class URControl:
                     linear_control_msg = self.linear_control()
                     control_msg.data = linear_control_msg
 
-                    if (
-                        self.is_collistion is False
-                        and self.right_controller_joy.buttons[2] == 0
-                    ):
-                        self.rtde_c.speedL([0, 0, 0, 0, 0, 0], acceleration=0.25)
-
-                        rospy.logwarn("Collision detected.")
-                    else:
-                        self.rtde_c.speedL(linear_control_msg, acceleration=0.25)
+                    self.rtde_c.speedL(linear_control_msg, acceleration=0.25)
 
                 self.last_button = 0
 

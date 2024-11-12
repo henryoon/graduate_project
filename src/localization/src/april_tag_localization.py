@@ -36,6 +36,24 @@ class AprilTagDetector:
             self.id = id
             self.pose = pose
 
+        def to_json(self):
+            return {
+                "id": self.id,
+                "pose": {
+                    "position": {
+                        "x": self.pose.position.x,
+                        "y": self.pose.position.y,
+                        "z": self.pose.position.z,
+                    },
+                    "orientation": {
+                        "x": self.pose.orientation.x,
+                        "y": self.pose.orientation.y,
+                        "z": self.pose.orientation.z,
+                        "w": self.pose.orientation.w,
+                    },
+                },
+            }
+
     class AprilTagArray:
         def __init__(self, header: Header, tags: list):
             self.header = header
@@ -44,13 +62,18 @@ class AprilTagDetector:
         def append(self, tag):
             self.tags.append(tag)
 
+        def to_json(self):
+            return {"tags": [tag.to_json() for tag in self.tags]}
+
     def __init__(self):
         self.bridge = cv_bridge.CvBridge()
         self.tag_detector = apriltag.Detector(
             options=apriltag.DetectorOptions(families="tag36h11")
         )
 
-        tag_size = 0.08
+        self.tf_listener = tf.TransformListener()
+
+        tag_size = 0.04
         self.object_points = np.array(
             [
                 [-tag_size / 2.0, -tag_size / 2.0, 0.0],
@@ -62,20 +85,21 @@ class AprilTagDetector:
 
         self.image_array = None
         self.color_image_subscriber = rospy.Subscriber(
-            "/camera/color/image_raw", Image, self.color_image_callback
+            "/EEF_camera/color/image_raw", Image, self.color_image_callback
         )
 
-        self.camera_info = CameraInfo()
+        self.camera_info = None
         self.camera_info_subscriber = rospy.Subscriber(
-            "/camera/color/camera_info", CameraInfo, self.camera_info_callback
+            "/EEF_camera/color/camera_info", CameraInfo, self.camera_info_callback
         )
 
-        self.tags = self.AprilTagArray(header=Header(frame_id="camera"), tags=[])
+        self.tags = self.AprilTagArray(header=Header(frame_id="base_link"), tags=[])
 
     def color_image_callback(self, msg: Image):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
             cv_image_gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+
             self.image_array = cv_image_gray
 
             self.tags = self.detect_april_tags(cv_image_gray)
@@ -91,8 +115,12 @@ class AprilTagDetector:
     def detect_april_tags(self, np_image: np.array):
         tags = self.tag_detector.detect(np_image)
 
-        camera_matrix = np.array(self.camera_info.k).reshape(3, 3)
-        dist_coeffs = np.array(self.camera_info.d)
+        if self.camera_info is None:
+            rospy.logwarn("Camera info is not available.")
+            return self.AprilTagArray(header=Header(frame_id="base_link"), tags=[])
+
+        camera_matrix = np.array(self.camera_info.K).reshape(3, 3)
+        dist_coeffs = np.array(self.camera_info.D)
 
         tag_array = self.AprilTagArray(
             header=Header(frame_id="camera_link", stamp=rospy.Time.now()), tags=[]
@@ -100,13 +128,20 @@ class AprilTagDetector:
 
         for tag in tags:
             image_points = np.array(tag.corners)
+
             success, rotation_vector, translation_vector = cv2.solvePnP(
-                tag, image_points, camera_matrix, dist_coeffs
+                self.object_points, image_points, camera_matrix, dist_coeffs
             )
 
             if success:
                 translation_vector = translation_vector.flatten()
                 rotation_vector = rotation_vector.flatten()
+
+                pose_stamped = PoseStamped()
+
+                pose_stamped.header = Header(
+                    frame_id="EEF_camera_link", stamp=rospy.Time(0)
+                )
 
                 pose = Pose()
 
@@ -123,7 +158,21 @@ class AprilTagDetector:
                 pose.orientation.z = quaternion[2]
                 pose.orientation.w = quaternion[3]
 
-                tag_array.append(self.AprilTag(id=tag.tag_id, pose=pose))
+                pose_stamped.pose = pose
+
+                if self.tf_listener.canTransform(
+                    "base_link", "EEF_camera_link", rospy.Time(0)
+                ):
+                    transformed_pose = self.tf_listener.transformPose(
+                        "base_link", pose_stamped
+                    )
+                    tag_array.append(
+                        self.AprilTag(id=tag.tag_id, pose=transformed_pose.pose)
+                    )
+                else:
+                    rospy.logwarn(
+                        "Cannot lookup transform between base_link and EEF_camera_link."
+                    )
 
             else:
                 rospy.logwarn("Failed to solve PnP.")
@@ -169,7 +218,7 @@ class AprilTagLocalization:
     def __init__(self):
         self.april_tag_detector = AprilTagDetector()
         self.april_tag_data = AprilTagData(
-            file_path="/home/catkin_ws/src/localization/resources/april_data.json"
+            file_path="/home/irol/project_hj/src/localization/resources/001.json"
         )
 
         self.tf_listener = tf.TransformListener()
@@ -178,28 +227,40 @@ class AprilTagLocalization:
     def run(self):
         local_tags = self.april_tag_detector.tags
 
+        print(local_tags.to_json())
+
         for tag in local_tags.tags:
-            transform_msg = self.calculate_tf(
+            local_pose = PoseStamped()
+            local_pose.header = Header(frame_id="base_link", stamp=rospy.Time.now())
+            local_pose.pose = tag.pose
+
+            # Before
+            translation, rotation = self.calculate_tf(
                 global_pose=self.april_tag_data.get_pose(tag_id=tag.id),
-                local_pose=tag.pose,
+                local_pose=local_pose,
             )
 
-            self.tf_broadcaster.sendTransform(transform_msg)
+            # Before
+            # translation, rotation = self.calculate_tf(
+            #     global_pose=local_pose,
+            #     local_pose=self.april_tag_data.get_pose(tag_id=tag.id),
+            # )
+
+            # print(translation, rotation)
+
+            self.tf_broadcaster.sendTransform(
+                time=rospy.Time.now(),
+                parent="map",
+                child="base_link",
+                translation=translation,
+                rotation=rotation,
+            )
 
             return None
 
-    def calculate_tf(self, global_pose: PoseStamped, local_pose: PoseStamped):
-        global_frame = global_pose.header.frame_id
+    def calculate_tf(self, local_pose: PoseStamped, global_pose: PoseStamped):
         local_frame = local_pose.header.frame_id
-
-        (global_roll, global_pitch, global_yaw) = euler_from_quaternion(
-            [
-                global_pose.pose.orientation.x,
-                global_pose.pose.orientation.y,
-                global_pose.pose.orientation.z,
-                global_pose.pose.orientation.w,
-            ]
-        )
+        global_frame = global_pose.header.frame_id
 
         (local_roll, local_pitch, local_yaw) = euler_from_quaternion(
             [
@@ -210,47 +271,41 @@ class AprilTagLocalization:
             ]
         )
 
-        droll = local_roll - global_roll
-        dpitch = local_pitch - global_pitch
-        dyaw = local_yaw - global_yaw
-
-        translate = [
-            local_pose.pose.position.x
-            - (
-                (global_pose.pose.position.x * np.cos(dyaw) * np.cos(dpitch))
-                - (global_pose.pose.position.y * np.sin(dyaw) * np.cos(dpitch))
-                + (global_pose.pose.position.z * np.sin(dpitch))
-            ),
-            local_pose.pose.position.y
-            - (
-                (global_pose.pose.position.x * np.sin(dyaw) * np.cos(droll))
-                + (global_pose.pose.position.y * np.cos(dyaw) * np.cos(droll))
-                - (global_pose.pose.position.z * np.sin(droll))
-            ),
-            local_pose.pose.position.z
-            - (
-                (global_pose.pose.position.x * np.sin(dpitch) * np.cos(dyaw))
-                - (global_pose.pose.position.y * np.sin(dpitch) * np.sin(dyaw))
-                - (global_pose.pose.position.z * np.cos(dpitch))
-            ),
-        ]
-
-        rotation = quaternion_from_euler([droll, dpitch, dyaw])
-
-        msg = TransformStamped()
-
-        msg.header.frame_id = global_frame
-        msg.header.stamp = rospy.Time.now()
-        msg.child_frame_id = local_frame
-
-        msg.transform = Transform(
-            translation=Vector3(x=translate[0], y=translate[1], z=translate[2]),
-            rotation=Quaternion(
-                x=rotation[0], y=rotation[1], z=rotation[2], w=rotation[3]
-            ),
+        (global_roll, global_pitch, global_yaw) = euler_from_quaternion(
+            [
+                global_pose.pose.orientation.x,
+                global_pose.pose.orientation.y,
+                global_pose.pose.orientation.z,
+                global_pose.pose.orientation.w,
+            ]
         )
 
-        return msg
+        droll = global_roll - local_roll
+        dpitch = global_pitch - local_pitch
+        dyaw = global_yaw - local_yaw
+
+        print(droll, dpitch, dyaw)
+
+        # Calculate translation in 3D space
+        trans_x = global_pose.pose.position.x - (
+            (local_pose.pose.position.x * np.cos(dyaw) * np.cos(dpitch))
+            - (local_pose.pose.position.y * np.sin(dyaw) * np.cos(dpitch))
+            - (local_pose.pose.position.z * np.sin(dpitch))
+        )
+
+        trans_y = global_pose.pose.position.y - (
+            (local_pose.pose.position.x * np.sin(dyaw) * np.cos(droll))
+            + (local_pose.pose.position.y * np.cos(dyaw) * np.cos(droll))
+            - (local_pose.pose.position.z * np.sin(droll))
+        )
+
+        trans_z = global_pose.pose.position.z - local_pose.pose.position.z
+
+        translation = [trans_x, trans_y, trans_z]
+
+        rotation = quaternion_from_euler(0.0, 0.0, dyaw)
+
+        return translation, rotation
 
 
 def main():
@@ -258,15 +313,16 @@ def main():
 
     april_tag_localization = AprilTagLocalization()
 
-    r = rospy.Rate(10)  # TODO: Add rate
+    r = rospy.Rate(20)  # TODO: Add rate
     while not rospy.is_shutdown():
         april_tag_localization.run()
         r.sleep()
 
 
 if __name__ == "__main__":
+    main()
     try:
-        main()
+        pass
     except rospy.ROSInterruptException as ros_ex:
         rospy.logfatal("ROS Interrupted.")
         rospy.logfatal(ros_ex)
