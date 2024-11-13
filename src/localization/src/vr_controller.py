@@ -26,30 +26,44 @@ from visualization_msgs.msg import *
 # Custom modules
 import rtde_control
 import rtde_receive
+from enum import Enum
+import time
 
 
 class URControl:
-    def __init__(self):
+    class ControlMode(Enum):
+        STOP = 0
+        LINEAR = 1
+        ANGULAR = 2
+
+    def __init__(self, hz: int = 20):
+        self.hz = hz
+
         IP = "192.168.2.2"
 
+        # RTDE Control and Receive Interface
         self.rtde_c = rtde_control.RTDEControlInterface(IP)
         self.rtde_r = rtde_receive.RTDEReceiveInterface(IP)
 
+        # Right Controller Data : Initialize
         self.right_controller_twist = Twist()
         self.right_controller_joy = Joy()
         self.right_controller_joy.buttons = [0, 0, 0, 0]
 
+        # Left Controller Data : Initialize
         self.left_controller_joy = Joy()
         self.left_controller_joy.buttons = [0, 0, 0, 0]
 
-        self.last_time = rospy.Time.now()
+        # Spine Pose Data : Initialize
         self.spine_pose = Pose()
         self.angular_z_speed = 0.0
+        self.last_time = rospy.Time.now()
 
-        self.last_button = 0
+        self.control_mode = self.ControlMode.STOP
 
-        self.is_collistion = True
+        self.collision_is_valid = True
 
+        # Controller, Spine, Collision Subscriber
         self.right_controller_twist_sub = rospy.Subscriber(
             "/controller/right/twist", Twist, self.right_controller_callback
         )
@@ -59,21 +73,15 @@ class URControl:
         self.left_controller_joy_sub = rospy.Subscriber(
             "/controller/left/joy", Joy, self.left_controller_joy_callback
         )
-
         self.spine_pose_sub = rospy.Subscriber(
             "/spine/pose", Pose, self.spine_pose_callback
         )
-
-        self.control_msg_pub = rospy.Publisher(
-            "/control_msg", Float32MultiArray, queue_size=10
-        )
-
         self.collision_sub = rospy.Subscriber(
             "/is_collision", Bool, self.collision_callback
         )
 
     def collision_callback(self, msg: Bool):
-        self.is_collistion = msg.data
+        self.collision_is_valid = msg.data
 
     def right_controller_callback(self, msg: Twist):
         self.right_controller_twist = msg
@@ -91,6 +99,7 @@ class URControl:
 
         dt = (current_time - self.last_time).to_sec()
 
+        # Calculate angular z speed
         if dt > 0:
             last_quaternion = [
                 self.spine_pose.orientation.x,
@@ -131,70 +140,73 @@ class URControl:
         return input_data
 
     def angular_control(self):
-
         input_data = [np.clip(-self.angular_z_speed, -0.5, 0.5), 0, 0, 0, 0, 0]
 
         return input_data
 
     def control(self):
-        control_msg = Float32MultiArray()
-        # 오른손 검지 버튼이 눌렸을 때, 모든 종류의 동작 명령이 기동
+        # 충돌이 발생했을 때, 로봇을 정지시킴
+        if self.collision_is_valid is False:
+            self.rtde_c.speedL([0, 0, 0, 0, 0, 0], acceleration=0.25)
+            return None
 
+        # 오른손 검지 버튼이 눌렸을 때, 모든 종류의 동작 명령이 기동
         if self.right_controller_joy.buttons[3] == 1:
 
             # 왼손 검지 버튼이 눌렸을 때, 회전 명령
             if self.left_controller_joy.buttons[3] == 1:
-                if self.last_button == 0:
-                    self.rtde_c.speedL([0, 0, 0, 0, 0, 0], acceleration=0.25)
-                    control_msg.data = [0.0] * 6
 
+                # 만약 직선 명령이 진행 중이었다면, 정지 명령을 내린 후 회전 명령을 내림
+                if self.control_mode != self.ControlMode.ANGULAR:
+                    self.rtde_c.speedL([0, 0, 0, 0, 0, 0], acceleration=0.25)
+                    time.sleep(0.5)
+
+                # 만약 회전 명령이 진행 중이었다면, 회전 명령을 계속 진행
                 else:
                     angular_control_msg = self.angular_control()
                     self.rtde_c.speedJ(
-                        angular_control_msg, acceleration=0.25, time=0.05
+                        angular_control_msg, acceleration=0.25, time=(1 / self.hz)
                     )
-                    control_msg.data = angular_control_msg
 
-                self.last_button = 1
+                # 회전 명령으로 전환
+                self.control_mode = self.ControlMode.ANGULAR
 
             # 왼손 검지 버튼이 눌리지 않았을 때, 직선 명령
             else:
-                if self.last_button == 1:
-                    self.rtde_c.speedJ([0, 0, 0, 0, 0, 0], acceleration=0.25, time=0.05)
-                    control_msg.data = [0.0] * 6
 
+                # 만약 회전 명령이 진행 중이었다면, 정지 명령을 내린 후 직선 명령을 내림
+                if self.control_mode != self.ControlMode.LINEAR:
+                    self.rtde_c.speedJ([0, 0, 0, 0, 0, 0], acceleration=0.25)
+                    time.sleep(0.5)
+
+                # 만약 직선 명령이 진행 중이었다면, 직선 명령을 계속 진행
                 else:
                     linear_control_msg = self.linear_control()
-                    control_msg.data = linear_control_msg
+                    self.rtde_c.speedL(
+                        linear_control_msg, acceleration=0.25, time=(1 / self.hz)
+                    )
 
-                    self.rtde_c.speedL(linear_control_msg, acceleration=0.25)
-
-                self.last_button = 0
+                # 직선 명령으로 전환
+                self.control_mode = self.ControlMode.LINEAR
 
         # 오른손 검지 버튼이 눌리지 않았을 때, 정지 명령
         else:
             self.rtde_c.speedL([0, 0, 0, 0, 0, 0], acceleration=0.25)
-            control_msg.data = [0.0] * 6
-
-        self.control_msg_pub.publish(control_msg)
 
 
 def main():
     rospy.init_node("control_test_node")  # TODO: Add node name
 
-    robot_control = URControl()
+    hz = 20
 
-    r = rospy.Rate(20)  # TODO: Add rate
+    robot_control = URControl(hz=hz)
+
+    r = rospy.Rate(hz)  # TODO: Add rate
     while not rospy.is_shutdown():
 
         robot_control.control()
 
         r.sleep()
-
-
-# Rot Y 90
-# forearm 반대
-# writst 1 반대
 
 
 if __name__ == "__main__":

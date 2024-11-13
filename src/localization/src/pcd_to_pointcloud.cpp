@@ -36,11 +36,7 @@ int main(int argc, char** argv)
     ROS_INFO("Successfully loaded PCD file with %zu points.", cloud.size());
 
     // 다운 샘플링 비율 설정 (예: 10의 배수만 남기기)
-<<<<<<< HEAD
     int sampling_rate = 100;
-=======
-    int sampling_rate = 1;
->>>>>>> 4d8f99dbe8b8a566b2374bf5fc1267ff2a12c94c
     pcl::PointCloud<pcl::PointXYZRGB> downsampled_cloud;
 
     for (size_t i = 0; i < cloud.size(); ++i) {
