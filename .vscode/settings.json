@@ -1,7 +1,8 @@
 {
     "python.analysis.extraPaths": [
         "./src/test_package/src",
-        "./src/test_package/src"
+        "./src/test_package/src",
+        "./src/localization/src"
     ],
     "python.autoComplete.extraPaths": [
         "/home/irol/vslam_ws/devel/lib/python3/dist-packages",

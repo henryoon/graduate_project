@@ -159,7 +159,7 @@ class URControl:
                 # 만약 직선 명령이 진행 중이었다면, 정지 명령을 내린 후 회전 명령을 내림
                 if self.control_mode != self.ControlMode.ANGULAR:
                     self.rtde_c.speedL([0, 0, 0, 0, 0, 0], acceleration=0.25)
-                    time.sleep(0.5)
+                    # time.sleep(0.5)
 
                 # 만약 회전 명령이 진행 중이었다면, 회전 명령을 계속 진행
                 else:
@@ -177,7 +177,7 @@ class URControl:
                 # 만약 회전 명령이 진행 중이었다면, 정지 명령을 내린 후 직선 명령을 내림
                 if self.control_mode != self.ControlMode.LINEAR:
                     self.rtde_c.speedJ([0, 0, 0, 0, 0, 0], acceleration=0.25)
-                    time.sleep(0.5)
+                    # time.sleep(0.5)
 
                 # 만약 직선 명령이 진행 중이었다면, 직선 명령을 계속 진행
                 else:
