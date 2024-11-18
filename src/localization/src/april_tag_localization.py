@@ -252,13 +252,16 @@ class AprilTagDetector:
 
 class AprilTagLocalization:
     def __init__(self):
-        root_path = roslib.packages.get_pkg_dir("test_package") + "/resources/"
+        root_path = roslib.packages.get_pkg_dir("localization") + "/resources/"
         self.april_tag_detector = AprilTagDetector(
             tag_size=0.04, camera_frame="EEF_camera_link"
         )
-        self.april_tag_data = AprilTagData(file_path=root_path + "001.json")
+        self.april_tag_data = AprilTagData(file_path=root_path + "1113.json")
 
-        self.lpf = LowPassFilter(cutoff_freq=1.0, ts=0.1)
+        self.lpf_x = LowPassFilter(cutoff_freq=1.0, ts=0.01)
+        self.lpf_y = LowPassFilter(cutoff_freq=1.0, ts=0.01)
+        self.lpf_yaw = LowPassFilter(cutoff_freq=1.0, ts=0.01)
+
 
         self.tf_broadcaster = tf.TransformBroadcaster()
 
@@ -266,8 +269,8 @@ class AprilTagLocalization:
         # Detect AprilTags
         local_tags = self.april_tag_detector.tags
 
-        self.translations = np.array([])
-        self.rotations = np.array([])
+        translations = []
+        rotations = []
 
         for tag in local_tags.tags:
             global_pose = self.april_tag_data.get_pose(tag_id=tag.id)
@@ -282,21 +285,33 @@ class AprilTagLocalization:
                 local_pose=local_pose,
             )
 
-            np.append(self.translations, translation)
-            np.append(self.rotations, rotation)
+            translations.append(translation)
+            rotations.append(rotation)
 
-        avg_translation = np.mean(self.translations, axis=0).tolist()
-        _, _, avg_yaw = np.mean(self.rotations, axis=0).tolist()
+        if len(translations) == 0 or len(rotations) == 0:
+            avg_translation = [0.0, 0.0, 0.0]
+            avg_yaw = 0.0
+            
+            rospy.logwarn("No tags detected.")
 
-        filtered_yaw = self.lpf.filter(avg_yaw)
+        else:
+            avg_translation = np.mean(translations, axis=0).tolist()
+            _, _, avg_yaw = np.mean(rotations, axis=0).tolist()
+
+        filtered_x = self.lpf_x.filter(avg_translation[0])
+        filtered_y = self.lpf_y.filter(avg_translation[1])
+        filtered_yaw = self.lpf_yaw.filter(avg_yaw)
+
 
         self.tf_broadcaster.sendTransform(
             time=rospy.Time.now(),
             parent="map",
             child="base_link",
-            translation=avg_translation,
-            rotation=quaternion_inverse([0.0, 0.0, filtered_yaw]),
+            translation=[filtered_x, filtered_y, 0.0],
+            rotation=quaternion_from_euler(0.0, 0.0, filtered_yaw),
         )
+
+        return avg_translation, filtered_yaw
 
     def calculate_tf(self, local_pose: PoseStamped, global_pose: PoseStamped):
         (local_roll, local_pitch, local_yaw) = euler_from_quaternion(
@@ -348,9 +363,17 @@ def main():
 
     april_tag_localization = AprilTagLocalization()
 
-    r = rospy.Rate(30)  # TODO: Add rate
+    test = rospy.Publisher("/test", Float32MultiArray, queue_size=10)
+
+    r = rospy.Rate(10)  # TODO: Add rate
     while not rospy.is_shutdown():
-        april_tag_localization.run()
+        trans, yaw = april_tag_localization.run()
+
+        data = Float32MultiArray()
+        data.data = [trans[0], trans[1], trans[2], yaw]
+
+        test.publish(data)
+
         r.sleep()
 
 
