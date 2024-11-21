@@ -23,6 +23,7 @@ from sensor_msgs.msg import *
 from geometry_msgs.msg import *
 from nav_msgs.msg import *
 from visualization_msgs.msg import *
+from custom_msgs.msg import *
 
 
 class EEF_State(object):
@@ -33,12 +34,20 @@ class EEF_State(object):
         self.tool_frame = kwargs.get("tool_frame", "tool0")
         self.camera_frame = kwargs.get("camera_frame", "camera_link")
         self.box_topic = kwargs.get("box_topic", "/tf_C2O")
+        self.twist_topic = kwargs.get("twist_topic", "/twist")
 
         self.box = None
+        self.twist = Twist()
 
         self.box_subscirber = rospy.Subscriber(
             self.box_topic, PoseArray, self.box_callback
         )
+        self.twist_subscriber = rospy.Subscriber(
+            self.twist_topic, Twist, self.twist_callback
+        )
+
+    def twist_callback(self, msg: Twist):
+        self.twist = msg
 
     def box_callback(self, msg: PoseArray):
         if len(msg.poses) == 0:
@@ -100,8 +109,17 @@ class DataLogger:
         self.tool_frame = kwargs.get("tool_frame", "tool0")
         self.camera_frame = kwargs.get("camera_frame", "camera_link")
         self.box_topic = kwargs.get("box_topic", "/tf_C2O")
+        self.twist_topic = kwargs.get("twist_topic", "/twist")
 
         self.hz = kwargs.get("hz", 10)
+
+        self.boxes_sub = rospy.Subscriber("/april_box", BoxObjectMultiArray, self.boxes_callback)
+        self.boxes = []
+
+        self.joystick_sub = rospy.Subscriber(
+            "/controller/right/joy", Joy, self.joystick_callback
+        )
+        self.is_pressed_A = 0
 
         self.last_pose = None
         self.last_heading = None
@@ -112,134 +130,70 @@ class DataLogger:
             tool_frame=self.tool_frame,
             camera_frame=self.camera_frame,
             box_topic=self.box_topic,
+            twist_topic=self.twist_topic,
         )
 
-    def calculate_eef_pose(self):
-        return self.eef.get_tf_origin()
+    def boxes_callback(self, msg: BoxObjectMultiArray):
+        self.boxes = msg.boxes
+        # return
+    
+        # if len(self.boxes) == 0:
+        #     self.boxes = msg.boxes
 
-    def calculate_linear_velocity(self, last_pose: Pose, current_pose: Pose, dt: float):
-        dx = current_pose.position.x - last_pose.position.x
-        dy = current_pose.position.y - last_pose.position.y
-        dz = current_pose.position.z - last_pose.position.z
+        # new_data = self.boxes
 
-        linear_velocity = Vector3(x=dx / dt, y=dy / dt, z=dz / dt)
+        # for new_box in msg.boxes:
+        #     # new_box => new box
+        #     for box in new_data:
+        #         # box => current box
+        #         if box.id == new_box.id:
+        #             new_data.remove(box)
+        #             new_data.append(new_box)
+        #             break
 
-        return linear_velocity
+        # self.data = new_data
 
-    def calculate_angular_velocity(
-        self, last_pose: Pose, current_pose: Pose, dt: float
-    ):
-        last_orientation = [
-            last_pose.orientation.x,
-            last_pose.orientation.y,
-            last_pose.orientation.z,
-            last_pose.orientation.w,
-        ]
-        current_orientation = [
-            current_pose.orientation.x,
-            current_pose.orientation.y,
-            current_pose.orientation.z,
-            current_pose.orientation.w,
-        ]
+    def log_boxes(self):
+        text = ""
 
-        d_orientation = quaternion_multiply(
-            quaternion_inverse(last_orientation), current_orientation
-        )
+        for box in self.boxes:
+            text += f"-1,{box.id}, {box.pose.position.x}, {box.pose.position.y}, {box.pose.position.z},".replace(" ", "")
 
-        roll, pitch, yaw = euler_from_quaternion(d_orientation)
+        text = text[:-1]
 
-        angular_velocity = Vector3(x=roll / dt, y=pitch / dt, z=yaw / dt)
+        return text
 
-        return angular_velocity
 
-    def calculate_heading_vector(self, last_pose: Pose, current_pose: Pose):
-        dx = current_pose.position.x - last_pose.position.x
-        dy = current_pose.position.y - last_pose.position.y
-        dz = current_pose.position.z - last_pose.position.z
+    def joystick_callback(self, msg: Joy):
+        A = msg.buttons[0]
+        self.is_pressed_A = int(A)
 
-        v = np.array([dx, dy, dz])
-        v1 = np.array([1.0, 0.0, 0.0])  # 기준 벡터
-        norm = np.linalg.norm([dx, dy, dz])
+        if self.is_pressed_A == 1:
+            self.joystick_sub.unregister()
 
-        if norm < 1e-8:  # 벡터의 크기가 0이면 회전이 의미가 없음
-            return self.last_heading
-
-        v2 = v / norm  # 주어진 벡터 정규화
-
-        # 회전각 계산 (내적 이용)
-        dot_product = np.dot(v1, v2)
-        theta = np.arccos(np.clip(dot_product, -1.0, 1.0))  # 수치 안정성을 위한 clip
-
-        # 회전축 계산 (외적 이용)
-        u = np.cross(v1, v2)
-        if np.linalg.norm(u) < 1e-8:  # 외적이 0이면 벡터가 평행한 경우
-            u = np.array([0, 0, 0])  # 회전축이 의미가 없음
-        else:
-            u = u / np.linalg.norm(u)  # 회전축 정규화
-
-        # 쿼터니언 계산
-        qx = u[0] * np.sin(theta / 2)
-        qy = u[1] * np.sin(theta / 2)
-        qz = u[2] * np.sin(theta / 2)
-        qw = np.cos(theta / 2)
-
-        position = current_pose.position
-        orientation = Quaternion(x=qx, y=qy, z=qz, w=qw)
-        pose = Pose(position=position, orientation=orientation)
-
-        self.last_heading = pose
-
-        return pose
-
-    def calculate_eef_state(self):
-        if self.last_pose is None:
-            self.last_pose = self.calculate_eef_pose()
-            self.last_time = rospy.Time.now()
-            return None, None, None
-
-        current_pose = self.calculate_eef_pose()
-        current_time = rospy.Time.now()
-
-        if current_pose is None:
-            return None, None, None
-
-        dt = (current_time - self.last_time).to_sec()
-        linear_velocity = self.calculate_linear_velocity(
-            self.last_pose, current_pose, dt
-        )
-        angular_velocity = self.calculate_angular_velocity(
-            self.last_pose, current_pose, dt
-        )
-        heading_vector = self.calculate_heading_vector(self.last_pose, current_pose)
-
-        self.last_pose = current_pose
-        self.last_time = current_time
-
-        twist = Twist(linear=linear_velocity, angular=angular_velocity)
-
-        return current_pose, twist, heading_vector
 
     def run(self):
         r = rospy.Rate(self.hz)
 
-        f = open(self.log_path + "/" + self.log_file, "w")
+        f = open(self.log_path + "/" + self.log_file + ".csv", "w")
+        f2 = open(self.log_path + "/" + self.log_file + "_box.csv", "w")
 
         f.write(
-            "Time, Pose.x, Pose.y, Pose.z, Pose.qx, Pose.qy, Pose.qz, Pose.qw, Twist.linear.x, Twist.linear.y, Twist.linear.z, Twist.angular.x, Twist.angular.y, Twist.angular.z, Heading.qx, Heading.qy, Heading.qz, Heading.qw, Box.x, Box.y, Box.z, Box.qx, Box.qy, Box.qz, Box.qw\n".replace(
+            "Time, Pose.x, Pose.y, Pose.z, Twist.linear.x, Twist.linear.y, Twist.linear.z, Twist.angular.x, Twist.angular.y, Twist.angular.z\n".replace(
                 " ", ""
             )
         )
 
+
         while not rospy.is_shutdown():
-            eef_pose, eef_twist, heading = self.calculate_eef_state()
+            eef_pose = self.eef.get_tf_origin()
+            eef_twist = self.eef.twist
             box = self.eef.box
 
-            if eef_pose is None or eef_twist is None or heading is None:
+            if eef_pose is None or eef_twist is None:
                 warn_txt = "Cannot calculate: "
                 warn_txt += "EEF Pose\t" if eef_pose is None else ""
                 warn_txt += "EEF Twist\t" if eef_twist is None else ""
-                warn_txt += "Heading\t" if heading is None else ""
-                warn_txt += "Box\t" if box is None else ""
 
                 rospy.logwarn(warn_txt)
 
@@ -247,26 +201,35 @@ class DataLogger:
 
                 continue
 
-            txt = ""
+            if self.is_pressed_A == 1:
+                rospy.loginfo("Logging Stopped.")
+                f.close()
+                f2.close()
+                break
 
+            current_time = rospy.Time.now().to_sec()
+
+            txt = ""
             # Time
-            txt += f"{rospy.Time.now().to_sec()},"
+            txt += f"{current_time},"
             # Pose
-            txt += f"{eef_pose.position.x}, {eef_pose.position.y}, {eef_pose.position.z}, {eef_pose.orientation.x}, {eef_pose.orientation.y}, {eef_pose.orientation.z}, {eef_pose.orientation.w},"
+            txt += f"{eef_pose.position.x}, {eef_pose.position.y}, {eef_pose.position.z},"
             # Twist
-            txt += f"{eef_twist.linear.x}, {eef_twist.linear.y}, {eef_twist.linear.z}, {eef_twist.angular.x}, {eef_twist.angular.y}, {eef_twist.angular.z},"
-            # Heading
-            txt += f"{heading.orientation.x}, {heading.orientation.y}, {heading.orientation.z}, {heading.orientation.w},"
-            # Box
-            if box is not None:
-                txt += f"{box.position.x}, {box.position.y}, {box.position.z}, {box.orientation.x}, {box.orientation.y}, {box.orientation.z}, {box.orientation.w},"
-            else:
-                txt += "0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0".replace(" ", "")
+            txt += f"{eef_twist.linear.x}, {eef_twist.linear.y}, {eef_twist.linear.z}, {eef_twist.angular.x}, {eef_twist.angular.y}, {eef_twist.angular.z}"
             txt += "\n"
 
             f.write(txt.replace(" ", ""))
 
-            rospy.loginfo("Logging Success! : {}".format(rospy.Time.now().to_sec()))
+            box_text = ""
+            # Time
+            box_text += f"{current_time},"
+            # Data
+            box_text += self.log_boxes()
+            box_text += "\n"
+
+            f2.write(box_text.replace(" ", ""))
+
+            rospy.loginfo("Logging Success! : {}, {}".format(rospy.Time.now().to_sec(), len(self.boxes)))
 
             r.sleep()
 
@@ -277,21 +240,31 @@ def main():
     # rospy.spin()
 
     logger = DataLogger(
-        log_file="data_log.csv",
-        log_path="/home/catkin_ws/src",
+        log_file="241121_09",
+        log_path="/home/irol/project_hj/src/intention/resource",
         base_frame="base_link",
-        tool_frame="camera",
-        camera_frame="camera",
+        tool_frame="VGC",
+        camera_frame="EEF_camera_link",
         box_topic="/tf_C2O",
+        twist_topic="/calculated_twist",
         hz=10,
     )
+
+
+    file_list = os.listdir("/home/irol/project_hj/src/intention/resource")
+
+    for file in file_list:
+        if file == logger.log_file + ".csv":
+            rospy.loginfo("File already exists.")
+            return None
 
     logger.run()
 
 
 if __name__ == "__main__":
+    main()
     try:
-        main()
+        pass
     except rospy.ROSInterruptException as ros_ex:
         rospy.logfatal("ROS Interrupted.")
         rospy.logfatal(ros_ex)

@@ -1,66 +1,23 @@
-#!/usr/bin/python3
-
-# Basic modules
-import os
-import sys
-import rospy
-import roslib
+from matplotlib import pyplot as plt
 import numpy as np
+import pandas as pd
+from mpl_toolkits.mplot3d import Axes3D
 
-# TF modules
-import tf
-from tf.transformations import (
-    euler_from_quaternion,
-    quaternion_from_euler,
-    quaternion_inverse,
-    quaternion_multiply,
-)
-
-# Messages
-from std_msgs.msg import *
-from sensor_msgs.msg import *
-from geometry_msgs.msg import *
-from nav_msgs.msg import *
-from visualization_msgs.msg import *
+data = pd.read_csv("/home/irol/project_hj/src/intention/resource/241121_01.csv")
 
 
-def main():
-    rospy.init_node("test_node")  # TODO: Add node name
-
-    # rospy.spin()
-
-    pub = rospy.Publisher(
-        "test", PointStamped, queue_size=10
-    )  # TODO: Add publisher topic
-
-    msg = PointStamped()
-
-    msg.header.frame_id = "tool0"
-    msg.header.stamp = rospy.Time.now()
-
-    msg.point.x = -1.0  # 왼쪽 1
-    msg.point.y = -3.0  # 위로 3
-    msg.point.z = 5.0  # 앞으로 5
-
-    msg.header.stamp = rospy.Time.now()
-
-    r = rospy.Rate(1)  # TODO: Add rate
-    while not rospy.is_shutdown():
-
-        pub.publish(msg)
-        r.sleep()
+fig = plt.figure()
+ax = fig.add_subplot(111, projection="3d")
 
 
-if __name__ == "__main__":
-    try:
-        main()
-    except rospy.ROSInterruptException as ros_ex:
-        rospy.logfatal("ROS Interrupted.")
-        rospy.logfatal(ros_ex)
-    except Exception as ex:
-        rospy.logfatal("Exception occurred.")
-        rospy.logfatal(ex)
-    finally:
-        rospy.loginfo("Shutting down.")
-        rospy.signal_shutdown("Shutting down.")
-        sys.exit(0)
+# Scatter plot
+ax.plot(data["Pose.x"], data["Pose.y"], data["Pose.z"])
+
+
+# Labels
+ax.set_xlabel("Pose.x")
+ax.set_ylabel("Pose.y")
+ax.set_zlabel("Pose.z")
+
+
+plt.show()
