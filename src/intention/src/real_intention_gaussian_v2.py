@@ -25,8 +25,9 @@ from visualization_msgs.msg import *
 from custom_msgs.msg import *
 
 # Custom
-from sklearn.cluster import KMeans
 from scipy.stats import multivariate_normal
+from scipy.stats import norm
+from scipy.integrate import quad
 from enum import Enum
 
 try:
@@ -35,6 +36,55 @@ try:
 except roslib.exceptions.ROSLibException:
     rospy.logfatal("Cannot find package test_package")
     sys.exit(1)
+
+
+# 정규분포 PDF
+def gaussian_pdf(x, mu, sigma):
+    return norm.pdf(x, loc=mu, scale=sigma)
+
+
+# Gaussian Class
+class Gaussian:
+    def __init__(self, mean, sigma):
+        self.mean = mean
+        self.sigma = sigma
+
+    def get_approximation(self, x):
+        return (1 / np.sqrt(2 * np.pi * self.sigma)) * np.exp(
+            -((x - self.mean) ** 2) / (2 * self.sigma)
+        )
+
+
+# Gaussian Approximation Class. Input gaussian and function, return result and covariance
+class GaussianApproximation:
+    def __init__(self, func: callable, gaussian: Gaussian):
+        self.func = func
+        self.gaussian = gaussian
+
+    def get_result(self):
+        def do_integrand(x, mu, sigma):
+            return self.func(x) * gaussian_pdf(x, mu, sigma)
+
+        def do_square_integrand(x, mu, sigma):
+            return self.func(x) ** 2 * gaussian_pdf(x, mu, sigma)
+
+        res, _ = quad(
+            do_integrand,
+            -np.inf,
+            np.inf,
+            args=(self.gaussian.mean, self.gaussian.sigma),
+        )
+
+        square, _ = quad(
+            do_square_integrand,
+            -np.inf,
+            np.inf,
+            args=(self.gaussian.mean, self.gaussian.sigma),
+        )
+
+        cov = square - res**2
+
+        return res, cov
 
 
 class BoxManager:
