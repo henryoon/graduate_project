@@ -19,13 +19,13 @@ class GlobalBoxPosePublisher:
     def __init__(self):
         # Load virtual boxes data from json file
         self.boxes = self.load_boxes_from_json(
-            "/home/irol/project_hj/src/box_pose_estimation/resource/virtual_boxes_data.json"
+            "/home/irol/project_hj/src/box_pose_estimation/resource/1205_virtual_boxes_data.json"
         )
 
         self.marker_array = self.parse_box_to_marker_array()
 
         self.data_pub = rospy.Publisher(
-            "/segmetation/boxes", BoxObjectMultiArray, queue_size=1
+            "/virtual_box", BoxObjectMultiArray, queue_size=1
         )
         self.pub = rospy.Publisher("/boxes/virtual", MarkerArray, queue_size=1)
 

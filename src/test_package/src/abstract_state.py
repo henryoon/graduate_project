@@ -88,3 +88,21 @@ class State(Localization):
         else:
             rospy.logerr("Cannot get transform from map to {}".format(self.frame_id))
             return None
+        
+    def get_target_frame_pose2(self, target_frame: str):
+        if self.tf_listener.canTransform(target_frame, self.frame_id, time=rospy.Time()):
+            origin_pose = PoseStamped()
+            origin_pose.header = Header(frame_id=self.frame_id, stamp=rospy.Time())
+            origin_pose.pose.orientation.w = 1.0  # Base Pose
+
+            transfromed_pose = self.tf_listener.transformPose(target_frame, origin_pose)
+
+            self.trajectory_data = self.get_trajectory_data(transfromed_pose)
+
+            self.transformed_pose = transfromed_pose
+
+            return self.transformed_pose
+        else:
+            rospy.logerr("Cannot get transform from map to {}".format(self.frame_id))
+            return None
+        

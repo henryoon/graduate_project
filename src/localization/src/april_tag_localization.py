@@ -145,12 +145,12 @@ class AprilTagDetector:
         self.tf_listener = tf.TransformListener()
 
         self.color_image_subscriber = rospy.Subscriber(
-            "/EEF_camera/color/image_raw", Image, self.color_image_callback
+            "/d405_camera/color/image_raw", Image, self.color_image_callback
         )
 
         self.camera_info = None
         self.camera_info_subscriber = rospy.Subscriber(
-            "/EEF_camera/color/camera_info", CameraInfo, self.camera_info_callback
+            "/d405_camera/color/camera_info", CameraInfo, self.camera_info_callback
         )
 
         # Initialize AprilTagArray

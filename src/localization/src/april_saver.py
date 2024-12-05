@@ -40,7 +40,7 @@ class Saver:
             json.dump(json_data, f, indent=4)
 
     def trigger_callback(self, msg: Bool):
-        self.save(file_path="/home/irol/project_hj/src/localization/resources/1113.json")
+        self.save(file_path="/home/irol/project_hj/src/localization/resources/1205_april_data.json")
 
         self.trigger_sub.unregister()
 

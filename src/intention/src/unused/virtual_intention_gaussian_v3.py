@@ -105,29 +105,16 @@ class BoxManager:
     def __init__(self, topic: str):
         self.__sub = rospy.Subscriber(topic, BoxObjectMultiArray, self.callback)
         self.__box_pub = rospy.Publisher(
-            "/boxes/real/visual", MarkerArray, queue_size=10
+            "boxes/virtual/visual", MarkerArray, queue_size=10
         )
 
         self.data = []  # [BoxObject]
 
     def callback(self, msg: BoxObjectMultiArray):
-        new_data = self.data
+        new_data = []
 
         for new_box in msg.boxes:
-            new_box: BoxObject
-            flag = True
-
-            for box in new_data:
-                box: BoxObject
-
-                if box.id == new_box.id:
-                    new_data.remove(box)
-                    new_data.append(new_box)
-                    flag = False
-                    break
-
-            if flag:
-                new_data.append(new_box)
+            new_data.append(new_box)
 
         self.data = new_data
 
@@ -273,14 +260,12 @@ class RealIntentionGaussian:
                 return float(theta_d_min), float(theta_d_max)
 
             return 0.0, 0.0
-        
 
     def __init__(self):
         # Define EEF and Boxes
-        self.eef_pose_state = State(topic=None, frame_id="VGC")
+        self.eef_pose_state = State(topic=None, frame_id="VGC_virtual")
         self.eef_twist_state = EEF_Twist_Subscriber("/calculated_twist")
-        # self.box_manager = BoxManager("/april_box")
-        self.box_manager = BoxManager("/real_box/eb")
+        self.box_manager = BoxManager("/virtual_box")
 
         # Variables
         self.mean = np.array([0, 0])
@@ -303,13 +288,11 @@ class RealIntentionGaussian:
         self.a = 1.0
         self.last_direction = True
 
-        self.cov_msg = PoseWithCovarianceStamped()
-
         # ROS
         self.right_controller_sub = rospy.Subscriber(
             "/controller/right/joy", Joy, self.right_controller_callback
         )  # Trigger to reset
-        self.best_box_pub = rospy.Publisher("/best_box/real", BoxObject, queue_size=10)
+        self.best_box_pub = rospy.Publisher("/best_box/virtual", BoxObject, queue_size=10)
 
     def reset(self):
         """Reset data"""
@@ -332,7 +315,7 @@ class RealIntentionGaussian:
             self.reset()
 
     def get_mean_and_covariance(self):
-        p = self.eef_pose_state.get_target_frame_pose2(target_frame="base_link")
+        p = self.eef_pose_state.get_target_frame_pose2(target_frame="map")
         v = self.eef_twist_state.data.linear
 
         if p is None:
@@ -460,7 +443,7 @@ class RealIntentionGaussian:
 
 
 def main():
-    rospy.init_node("real_intention_gaussian_node")  # TODO: Add node name
+    rospy.init_node("virtual_intention_gaussian_node")  # TODO: Add node name
 
     intention = RealIntentionGaussian()
 
