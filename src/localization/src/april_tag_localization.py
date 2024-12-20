@@ -258,12 +258,32 @@ class AprilTagLocalization:
         )
         self.april_tag_data = AprilTagData(file_path=root_path + "1113.json")
 
+        self.user_trigger_subscriber = rospy.Subscriber(
+            "/trigger", UInt8, self.trigger_callback
+        )
+        self.trigger = False
+
         self.lpf_x = LowPassFilter(cutoff_freq=1.0, ts=0.01)
         self.lpf_y = LowPassFilter(cutoff_freq=1.0, ts=0.01)
         self.lpf_yaw = LowPassFilter(cutoff_freq=1.0, ts=0.01)
 
+        self.transform_data = {
+            "time": rospy.Time.now(),
+            "parent": "map",
+            "child": "base_link",
+            "translation": [0.0, 0.0, 0.0],
+            "rotation": (0.0, 0.0, 0.0, 1.0),
+        }
 
         self.tf_broadcaster = tf.TransformBroadcaster()
+
+    def trigger_callback(self, msg: UInt8):
+        if msg.data == 0:
+            self.trigger = False
+        elif msg.data == 1:
+            self.trigger = True
+        else:
+            rospy.logwarn("Invalid trigger value.")
 
     def run(self):
         # Detect AprilTags
@@ -291,7 +311,7 @@ class AprilTagLocalization:
         if len(translations) == 0 or len(rotations) == 0:
             avg_translation = [0.0, 0.0, 0.0]
             avg_yaw = 0.0
-            
+
             rospy.logwarn("No tags detected.")
 
         else:
@@ -302,13 +322,26 @@ class AprilTagLocalization:
         filtered_y = self.lpf_y.filter(avg_translation[1])
         filtered_yaw = self.lpf_yaw.filter(avg_yaw)
 
+        # If trigger is True, Update the transform data
+        if self.trigger:
+            self.transform_data = {
+                "time": rospy.Time.now(),
+                "parent": "map",
+                "child": "base_link",
+                "translation": [filtered_x, filtered_y, 0.0],
+                "rotation": quaternion_from_euler(0.0, 0.0, filtered_yaw),
+            }
+
+        # If trigger is False, Use the previous transform data, Only Update the time
+        else:
+            self.transform_data["time"] = rospy.Time.now()
 
         self.tf_broadcaster.sendTransform(
-            time=rospy.Time.now(),
-            parent="map",
-            child="base_link",
-            translation=[filtered_x, filtered_y, 0.0],
-            rotation=quaternion_from_euler(0.0, 0.0, filtered_yaw),
+            time=self.transform_data["time"],
+            parent=self.transform_data["parent"],
+            child=self.transform_data["child"],
+            translation=self.transform_data["translation"],
+            rotation=self.transform_data["rotation"],
         )
 
         return avg_translation, filtered_yaw
@@ -363,16 +396,10 @@ def main():
 
     april_tag_localization = AprilTagLocalization()
 
-    test = rospy.Publisher("/test", Float32MultiArray, queue_size=10)
-
     r = rospy.Rate(10)  # TODO: Add rate
     while not rospy.is_shutdown():
+
         trans, yaw = april_tag_localization.run()
-
-        data = Float32MultiArray()
-        data.data = [trans[0], trans[1], trans[2], yaw]
-
-        test.publish(data)
 
         r.sleep()
 
