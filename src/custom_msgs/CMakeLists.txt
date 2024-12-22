@@ -23,6 +23,7 @@ add_message_files(
    Edge.msg
    DifferentialEncoder.msg
    MotorControl.msg
+   WaveMsg.msg
    )
 
 generate_messages(
