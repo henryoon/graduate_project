@@ -40,7 +40,9 @@ class Saver:
             json.dump(json_data, f, indent=4)
 
     def trigger_callback(self, msg: Bool):
-        self.save(file_path="/home/irol/project_hj/src/localization/resources/1205_april_data.json")
+        self.save(file_path="/home/irol/project_hj/src/localization/resources/1220_april_data.json")
+
+        rospy.loginfo("April data saved.")
 
         self.trigger_sub.unregister()
 

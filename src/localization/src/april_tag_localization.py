@@ -256,7 +256,7 @@ class AprilTagLocalization:
         self.april_tag_detector = AprilTagDetector(
             tag_size=0.04, camera_frame="EEF_camera_link"
         )
-        self.april_tag_data = AprilTagData(file_path=root_path + "1113.json")
+        self.april_tag_data = AprilTagData(file_path=root_path + "1220_april_data.json")
 
         self.user_trigger_subscriber = rospy.Subscriber(
             "/trigger", UInt8, self.trigger_callback
@@ -279,8 +279,10 @@ class AprilTagLocalization:
 
     def trigger_callback(self, msg: UInt8):
         if msg.data == 0:
+            rospy.loginfo("Disabling trigger. Use latest data.")
             self.trigger = False
         elif msg.data == 1:
+            rospy.loginfo("Enabling trigger.")
             self.trigger = True
         else:
             rospy.logwarn("Invalid trigger value.")
@@ -309,32 +311,29 @@ class AprilTagLocalization:
             rotations.append(rotation)
 
         if len(translations) == 0 or len(rotations) == 0:
-            avg_translation = [0.0, 0.0, 0.0]
-            avg_yaw = 0.0
-
+            # If no tags are detected, do not update the transform
             rospy.logwarn("No tags detected.")
 
         else:
-            avg_translation = np.mean(translations, axis=0).tolist()
-            _, _, avg_yaw = np.mean(rotations, axis=0).tolist()
+            # If tags are detected and trigger is True, Update the transform data
+            if self.trigger:
+                avg_translation = np.mean(translations, axis=0).tolist()
+                _, _, avg_yaw = np.mean(rotations, axis=0).tolist()
 
-        filtered_x = self.lpf_x.filter(avg_translation[0])
-        filtered_y = self.lpf_y.filter(avg_translation[1])
-        filtered_yaw = self.lpf_yaw.filter(avg_yaw)
+                filtered_x = self.lpf_x.filter(avg_translation[0])
+                filtered_y = self.lpf_y.filter(avg_translation[1])
+                filtered_yaw = self.lpf_yaw.filter(avg_yaw)
 
-        # If trigger is True, Update the transform data
-        if self.trigger:
-            self.transform_data = {
-                "time": rospy.Time.now(),
-                "parent": "map",
-                "child": "base_link",
-                "translation": [filtered_x, filtered_y, 0.0],
-                "rotation": quaternion_from_euler(0.0, 0.0, filtered_yaw),
-            }
+                self.transform_data = {
+                    "time": rospy.Time.now(),
+                    "parent": "map",
+                    "child": "base_link",
+                    "translation": [filtered_x, filtered_y, 0.0],
+                    "rotation": quaternion_from_euler(0.0, 0.0, filtered_yaw),
+                }
 
-        # If trigger is False, Use the previous transform data, Only Update the time
-        else:
-            self.transform_data["time"] = rospy.Time.now()
+
+        self.transform_data["time"] = rospy.Time.now()
 
         self.tf_broadcaster.sendTransform(
             time=self.transform_data["time"],
@@ -344,7 +343,8 @@ class AprilTagLocalization:
             rotation=self.transform_data["rotation"],
         )
 
-        return avg_translation, filtered_yaw
+        return None
+
 
     def calculate_tf(self, local_pose: PoseStamped, global_pose: PoseStamped):
         (local_roll, local_pitch, local_yaw) = euler_from_quaternion(
@@ -399,7 +399,7 @@ def main():
     r = rospy.Rate(10)  # TODO: Add rate
     while not rospy.is_shutdown():
 
-        trans, yaw = april_tag_localization.run()
+        april_tag_localization.run()
 
         r.sleep()
 
