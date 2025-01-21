@@ -43,7 +43,7 @@ class Wave:
         self.TOF_signal = 0
         self.TOF_check = 0
 
-        self.sef = serial.Serial("/dev/ttyUSB0", 921600)
+        self.ser = serial.Serial("/dev/ttyUSB4", 921600)
         self.ser.flushInput()
 
         self.run()
@@ -55,16 +55,17 @@ class Wave:
         TOF_check = TOF_check % 256
 
         if TOF_check == data[len - 1]:
-            print("TOF data is ok!")
+            # print("TOF data is ok!")
             return 1
         else:
-            print("TOF data is error!")
+            # print("TOF data is error!")
             return 0
 
     def run(self):
-        while True:
+        while not rospy.is_shutdown():
             TOF_data = ()
-            time.sleep(0.05)
+            # time.sleep(0.05)
+            rospy.sleep(0.05)
             if self.ser.inWaiting() >= 32:
                 for i in range(0, 16):
                     TOF_data = TOF_data + (ord(self.ser.read(1)), ord(self.ser.read(1)))
@@ -84,7 +85,8 @@ class Wave:
                         )
                     ):
                         if ((TOF_data[j + 12]) | (TOF_data[j + 13] << 8)) == 0:
-                            print("Out of range!")
+                            # print("Out of range!")
+                            pass
                         else:
                             # print("TOF id is: " + str(TOF_data[j + 3]))
                             data.id = TOF_data[j + 3]
@@ -112,6 +114,8 @@ class Wave:
                             # print("TOF signal is: " + str(TOF_signal))
                             data.signal = TOF_signal
 
+                            # rospy.loginfo(data)
+
                             self.pub.publish(data)
 
                         break
@@ -130,8 +134,9 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
     try:
-        main()
+        pass
     except rospy.ROSInterruptException as ros_ex:
         rospy.logfatal("ROS Interrupted.")
         rospy.logfatal(ros_ex)

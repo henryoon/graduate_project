@@ -270,7 +270,7 @@ class AprilTagLocalization:
         self.transform_data = {
             "time": rospy.Time.now(),
             "parent": "map",
-            "child": "base_link",
+            "child": "base_link_virtual",
             "translation": [0.0, 0.0, 0.0],
             "rotation": (0.0, 0.0, 0.0, 1.0),
         }
@@ -327,11 +327,10 @@ class AprilTagLocalization:
                 self.transform_data = {
                     "time": rospy.Time.now(),
                     "parent": "map",
-                    "child": "base_link",
+                    "child": "base_link_virtual",
                     "translation": [filtered_x, filtered_y, 0.0],
                     "rotation": quaternion_from_euler(0.0, 0.0, filtered_yaw),
                 }
-
 
         self.transform_data["time"] = rospy.Time.now()
 
@@ -344,7 +343,6 @@ class AprilTagLocalization:
         )
 
         return None
-
 
     def calculate_tf(self, local_pose: PoseStamped, global_pose: PoseStamped):
         (local_roll, local_pitch, local_yaw) = euler_from_quaternion(

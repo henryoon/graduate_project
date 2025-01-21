@@ -71,8 +71,8 @@ class PoseTransformer:
         )
 
     def publish_transform(self):
-        if True:
-        # if self.real_best_box is None or self.virtual_best_box is None:
+        if self.real_best_box is None or self.virtual_best_box is None:
+            # if True:
             # Publish base-transform
             rospy.logwarn("Best box not found.")
             self.publish_base_transform()
@@ -85,7 +85,6 @@ class PoseTransformer:
             #     for global_box in self.global_boxes.boxes
             #     if global_box.id == self.real_best_box.id
             # ]
-
 
             # if len(target_global_box) == 0:
             #     rospy.logwarn("Best box not found in global boxes.")
@@ -135,7 +134,6 @@ class PoseTransformer:
                 self.real_best_box.pose.orientation.z,
                 self.real_best_box.pose.orientation.w,
             )
-
 
             local_rotation = (0, 0, 0, 1)
 

@@ -19,6 +19,8 @@ add_message_files(
    FILES
    BoxObject.msg
    BoxObjectMultiArray.msg
+   BoxObjectWithPDF.msg
+   BoxObjectWithPDFMultiArray.msg
    Node.msg
    Edge.msg
    DifferentialEncoder.msg

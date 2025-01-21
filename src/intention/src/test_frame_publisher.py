@@ -35,16 +35,17 @@ class TestFramePublisher:
             rotation=(0, 0, 0, 1),
             time=rospy.Time.now(),
             child="base_link_virtual",
-            parent="map"
+            parent="map",
         )
 
-
     def get_tf_between_base_eef(self):
-        self.publish_fake_localization()
+        # self.publish_fake_localization()
 
         if self.tf_listener.canTransform("base_link", "VGC", rospy.Time(0)):
-            transform_data = self.tf_listener.lookupTransform("base_link", "VGC", rospy.Time(0))
-            
+            transform_data = self.tf_listener.lookupTransform(
+                "base_link", "VGC", rospy.Time(0)
+            )
+
             trans = transform_data[0]
             rot = transform_data[1]
 
@@ -53,14 +54,11 @@ class TestFramePublisher:
                 rotation=rot,
                 time=rospy.Time.now(),
                 child="VGC_virtual",
-                parent="base_link_virtual"
+                parent="base_link_virtual",
             )
-        
+
         else:
             rospy.logwarn("Cannot get transform between base_link and VCG.")
-
-    
-
 
 
 def main():
@@ -69,23 +67,22 @@ def main():
     # rospy.spin()
     tf_pub = TestFramePublisher()
 
-    
-
     r = rospy.Rate(10)  # TODO: Add rate
     while not rospy.is_shutdown():
         tf_pub.get_tf_between_base_eef()
         r.sleep()
 
+
 if __name__ == "__main__":
     try:
         main()
     except rospy.ROSInterruptException as ros_ex:
-        rospy.logfatal('ROS Interrupted.')
+        rospy.logfatal("ROS Interrupted.")
         rospy.logfatal(ros_ex)
     except Exception as ex:
-        rospy.logfatal('Exception occurred.')
+        rospy.logfatal("Exception occurred.")
         rospy.logfatal(ex)
     finally:
-        rospy.loginfo('Shutting down.')
-        rospy.signal_shutdown('Shutting down.')
+        rospy.loginfo("Shutting down.")
+        rospy.signal_shutdown("Shutting down.")
         sys.exit(0)

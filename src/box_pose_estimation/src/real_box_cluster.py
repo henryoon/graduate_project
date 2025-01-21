@@ -25,7 +25,6 @@ from visualization_msgs.msg import *
 from custom_msgs.msg import *
 
 
-
 class AverageFilter:
     def __init__(self):
         self.i = 0
@@ -65,7 +64,7 @@ class DetectedBox:
         dist = np.abs(np.linalg.norm(p1 - p2))
 
         return dist < 0.1
-    
+
     def __add__(self, other):
         p1 = np.array([self.point.x, self.point.y, self.point.z])
         p2 = np.array([other.point.x, other.point.y, other.point.z])
@@ -73,7 +72,6 @@ class DetectedBox:
         mean = np.mean([p1, p2], axis=0)
 
         return DetectedBox(Point(mean[0], mean[1], mean[2]), self.id)
-        
 
     def __str__(self):
         return f"Box at ({self.point.x}, {self.point.y}, {self.point.z})"
@@ -81,8 +79,10 @@ class DetectedBox:
 
 class RealBoxCluster:
     def __init__(self):
-        self.sub = rospy.Subscriber("/tf_B2O", PoseArray, self.boxes_callback)
-        self.box_object_multi_array_pub = rospy.Publisher("/real_box/eb", BoxObjectMultiArray, queue_size=1)
+        self.sub = rospy.Subscriber("/box_pose_array", PoseArray, self.boxes_callback)
+        self.box_object_multi_array_pub = rospy.Publisher(
+            "/real_box/eb", BoxObjectMultiArray, queue_size=1
+        )
 
         self.data = []
 
@@ -97,11 +97,11 @@ class RealBoxCluster:
             if new_box.abs_distance() > 5.0:
                 continue
 
-
             check_duplicate = [box == new_box for box in existing_boxes]
             if not any(check_duplicate):
                 # new_box.set_id(i)
-                existing_boxes.append(new_box)
+                if 0.8 < new_box.point.x and new_box.point.x < 1.0:
+                    existing_boxes.append(new_box)
 
             else:
                 if check_duplicate.count(True) > 1:
@@ -110,7 +110,7 @@ class RealBoxCluster:
                 else:
                     duplicated_box = existing_boxes[check_duplicate.index(True)]
                     updated_box = new_box + duplicated_box
-                    
+
                     existing_boxes.remove(duplicated_box)
                     existing_boxes.append(updated_box)
 
@@ -132,32 +132,31 @@ class RealBoxCluster:
 
             box_object_multi_array.boxes.append(box_object)
 
-
         self.box_object_multi_array_pub.publish(box_object_multi_array)
-
 
 
 def main():
     rospy.init_node("fuck")  # TODO: Add node name
 
     real_box_cluster = RealBoxCluster()
-    
+
     rospy.spin()
 
     # r = rospy.Rate()  # TODO: Add rate
     # while not rospy.is_shutdown():
     #     r.sleep()
 
+
 if __name__ == "__main__":
     try:
         main()
     except rospy.ROSInterruptException as ros_ex:
-        rospy.logfatal('ROS Interrupted.')
+        rospy.logfatal("ROS Interrupted.")
         rospy.logfatal(ros_ex)
     except Exception as ex:
-        rospy.logfatal('Exception occurred.')
+        rospy.logfatal("Exception occurred.")
         rospy.logfatal(ex)
     finally:
-        rospy.loginfo('Shutting down.')
-        rospy.signal_shutdown('Shutting down.')
+        rospy.loginfo("Shutting down.")
+        rospy.signal_shutdown("Shutting down.")
         sys.exit(0)
